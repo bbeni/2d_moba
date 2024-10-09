@@ -18,13 +18,21 @@
 #endif
 
 
+#include "common.h"
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 900
 
 #define BG_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
 
+
+// Networking stuff
+#define MESSAGE_LEN 512
+SOCKET server_socket;
+
 bool connect_to_server() {
+	server_socket = INVALID_SOCKET;
+
 	WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR) {
@@ -47,8 +55,8 @@ bool connect_to_server() {
     // IP address, and port of the server to be connected to.
     struct sockaddr_in clientService;
     clientService.sin_family = AF_INET;
-    clientService.sin_addr.s_addr = inet_addr("127.0.0.1");
-    clientService.sin_port = htons(27015);
+    clientService.sin_addr.s_addr = inet_addr(SERVER);
+    clientService.sin_port = htons(PORT);
 
     //----------------------
     // Connect to server.
@@ -62,8 +70,8 @@ bool connect_to_server() {
         return false;
     }
 
-    wprintf(L"Connected to server.\n");
-
+	
+	/* close 
     iResult = closesocket(ConnectSocket);
     if (iResult == SOCKET_ERROR) {
         wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
@@ -72,19 +80,54 @@ bool connect_to_server() {
     }
 
     WSACleanup();
+	*/
+    wprintf(L"Connected to server.\n");
+
+	server_socket = ConnectSocket;
     return true;
 }
 
+
 int main() {
+
+	while (!connect_to_server()) {
+		printf("Connecting to server...\n");
+		Sleep(1000);
+	}
+
+	
+	Message received = {0};
+	received.data = malloc(MESSAGE_LEN);
+
+    // Receive until the peer closes the connection
+	int iResult = 0;
+	do {
+        iResult = recv(server_socket, received.data, MESSAGE_LEN, 0);
+        if ( iResult > 0 ) {
+			printf("Bytes received: %d\n", iResult);
+			received.length = iResult;
+			State_Sync state_sync = deserialize_state_sync(received);
+			printf("Server id: %u\n", state_sync.server_id);
+			printf("Welcome string: %s\n", state_sync.welcome_string);
+			
+		}
+        else if ( iResult == 0 )
+            printf("Connection closed\n");
+        else
+            printf("recv failed: %d\n", WSAGetLastError());
+
+	} while( iResult > 0 );
+
+
+	free(received.data);
+	
+	return 0;
+
 	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
 
 	int w = WINDOW_WIDTH;
 	int h = WINDOW_HEIGHT;
 
-
-	if (!connect_to_server()) {
-		return 1;
-	}
 	
 	while(!WindowShouldClose()) {
 		BeginDrawing();

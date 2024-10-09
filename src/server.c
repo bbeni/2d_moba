@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "common.h"
+
 SOCKET setup_server(const char* ip_address, int port) {
 	WSADATA wsaData = {0};
 	int iResult = 0;
@@ -50,8 +52,6 @@ void shutdown_server(SOCKET listenSocket) {
     WSACleanup();
 }
 
-#define SERVER "127.0.0.1"
-#define PORT 27015
 
 int main(int argc, char** argv) {
 
@@ -63,12 +63,18 @@ int main(int argc, char** argv) {
 		AcceptSocket = accept(ListenSocket, NULL, NULL);
 		if (AcceptSocket == INVALID_SOCKET) {
 			wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
-			closesocket(ListenSocket);
-			WSACleanup();
-			return 1;
 		} else {
 			wprintf(L"Client connected.\n");
 		}
+
+		State_Sync s = {
+			STATE_SYNC,
+			123,
+			"Hello this message is from the server! Welome home!",
+		};
+		
+		Message msg = serialize_state_sync(&s);
+		send(AcceptSocket, msg.data, msg.length, 0);
 	}
 
 	shutdown_server(ListenSocket);
