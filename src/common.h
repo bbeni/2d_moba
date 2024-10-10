@@ -7,21 +7,21 @@
 #define PORT 27015
 
 typedef enum Message_Type: char {
-	STATE_SYNC,
-	JOINED,
-	MOVED,
+    STATE_SYNC,
+    JOINED,
+    MOVED,
 } Message_Type;
 
 typedef struct Message {
-	size_t length;
-	char* data;
+    size_t length;
+    char* data;
 } Message;
 
 typedef struct State_Sync {
-	enum Message_Type type;
-	
-	uint32_t server_id;
-	char welcome_string[512];
+    enum Message_Type type;
+
+    uint32_t server_id;
+    char welcome_string[512];
 } State_Sync;
 
 Message_Type read_message_type(Message message);

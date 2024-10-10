@@ -1,9 +1,9 @@
 #include "raylib.h"
 #include <stdio.h>
 
-#if defined(_WIN32)           
-	#define NOGDI             // All GDI defines and routines
-	#define NOUSER            // All USER defines and routines
+#if defined(_WIN32)
+    #define NOGDI             // All GDI defines and routines
+    #define NOUSER            // All USER defines and routines
 #endif
 
 
@@ -13,8 +13,8 @@
 #include <ws2tcpip.h>
 
 #if defined(_WIN32)           // raylib uses these names as function parameters
-	#undef near
-	#undef far
+    #undef near
+    #undef far
 #endif
 
 
@@ -31,9 +31,9 @@
 SOCKET server_socket;
 
 bool connect_to_server() {
-	server_socket = INVALID_SOCKET;
+    server_socket = INVALID_SOCKET;
 
-	WSADATA wsaData;
+    WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR) {
         wprintf(L"WSAStartup function failed with error: %d\n", iResult);
@@ -49,7 +49,7 @@ bool connect_to_server() {
         WSACleanup();
         return false;
     }
-	
+
     //----------------------
     // The sockaddr_in structure specifies the address family,
     // IP address, and port of the server to be connected to.
@@ -70,8 +70,8 @@ bool connect_to_server() {
         return false;
     }
 
-	
-	/* close 
+
+    /* close
     iResult = closesocket(ConnectSocket);
     if (iResult == SOCKET_ERROR) {
         wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
@@ -80,60 +80,60 @@ bool connect_to_server() {
     }
 
     WSACleanup();
-	*/
+    */
     wprintf(L"Connected to server.\n");
 
-	server_socket = ConnectSocket;
+    server_socket = ConnectSocket;
     return true;
 }
 
 
 int main() {
 
-	while (!connect_to_server()) {
-		printf("Connecting to server...\n");
-		Sleep(1000);
-	}
+    while (!connect_to_server()) {
+        printf("Connecting to server...\n");
+        Sleep(1000);
+    }
 
-	
-	Message received = {0};
-	received.data = malloc(MESSAGE_LEN);
+
+    Message received = {0};
+    received.data = malloc(MESSAGE_LEN);
 
     // Receive until the peer closes the connection
-	int iResult = 0;
-	do {
-		received.length = 0; // reset
+    int iResult = 0;
+    do {
+        received.length = 0; // reset
         iResult = recv(server_socket, received.data, MESSAGE_LEN, 0);
         if ( iResult > 0 ) {
-			printf("Bytes received: %d\n", iResult);
-			received.length = iResult;
-			State_Sync state_sync = deserialize_state_sync(received);
-			printf("Server id: %u\n", state_sync.server_id);
-			printf("Welcome string: %s\n", state_sync.welcome_string);
-			
-		} else if ( iResult == 0 ) {	
+            printf("Bytes received: %d\n", iResult);
+            received.length = iResult;
+            State_Sync state_sync = deserialize_state_sync(received);
+            printf("Server id: %u\n", state_sync.server_id);
+            printf("Welcome string: %s\n", state_sync.welcome_string);
+
+        } else if ( iResult == 0 ) {
             printf("Connection closed\n");
         } else {
             printf("recv failed: %d\n", WSAGetLastError());
-		}
-		Sleep(10);
-		
-	} while( iResult > 0 );
+        }
+        Sleep(10);
 
-	free(received.data);
-	
-	return 0;
+    } while( iResult > 0 );
 
-	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
+    free(received.data);
 
-	int w = WINDOW_WIDTH;
-	int h = WINDOW_HEIGHT;
+    return 0;
 
-	
-	while(!WindowShouldClose()) {
-		BeginDrawing();
-		ClearBackground(BG_COLOR);
-		DrawCircle(w/2, h/2, 200.0f, RED);
-		EndDrawing();
-	}
+    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
+
+    int w = WINDOW_WIDTH;
+    int h = WINDOW_HEIGHT;
+
+
+    while(!WindowShouldClose()) {
+        BeginDrawing();
+        ClearBackground(BG_COLOR);
+        DrawCircle(w/2, h/2, 200.0f, RED);
+        EndDrawing();
+    }
 }
