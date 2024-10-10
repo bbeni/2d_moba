@@ -163,6 +163,13 @@ void* consume_char_array(void* buf, char* out, size_t length) {
 // WELCOME TO MACRO LAND ! <3
 //
 
+// NOTE: i was too lazy to separate decalarations and implementations of
+// the deserialize_ and serialize_ functions. to avoid undefined reference
+// linker errors, the functions are now just static. this should be fixed
+// but for now just use this as a workaround and ingore warnings here!
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 #ifdef SER_CREATE
 #undef SER_CREATE
 
@@ -174,21 +181,20 @@ typedef struct SER_STRUCT_NAME {
 #undef SER_ARRAY
 #undef SER_FIELD
 
-#define SER_FIELD(type, name) serialize ## _ ## type(&message, data->name);
-#define SER_ARRAY(type, name, length) serialize ## _ ## type ## _array(&message, data->name, length);
+#define SER_FIELD(type, name) serialize ## _ ## type(message, data->name);
+#define SER_ARRAY(type, name, length) serialize ## _ ## type ## _array(message, data->name, length);
 #define MAKE_NAME(prefix, struct_name) prefix ## _ ## struct_name
-#define SER_DECLAREFUNC(prefix, struct_name) Message MAKE_NAME(prefix, struct_name)(struct_name* data)
+#define SER_DECLAREFUNC(prefix, struct_name) static void MAKE_NAME(prefix, struct_name)(Message* message, struct_name* data)
 SER_DECLAREFUNC(serialize, SER_STRUCT_NAME) {
-    Message message = {0};
+    message->length = 0; // reset so we dont realloc!
     SER_FIELDS
-    return message;
 };
 #undef SER_ARRAY
 #undef SER_FIELD
 
 #define SER_FIELD(type, name) buf = consume ## _ ## type(buf, &data.name);
 #define SER_ARRAY(type, name, length) buf = consume ## _ ## type ## _array(buf, data.name, length);
-#define SER_DECLAREFUNC2(prefix, struct_name) struct_name MAKE_NAME(prefix, struct_name)(Message* message)
+#define SER_DECLAREFUNC2(prefix, struct_name) static struct_name MAKE_NAME(prefix, struct_name)(Message* message)
 
 SER_DECLAREFUNC2(deserialize, SER_STRUCT_NAME) {
     SER_STRUCT_NAME data = {0};
@@ -203,3 +209,5 @@ SER_DECLAREFUNC2(deserialize, SER_STRUCT_NAME) {
 #undef SER_STRUCT_NAME
 
 #endif // SER_CREATE
+
+#pragma GCC diagnostic pop

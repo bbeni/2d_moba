@@ -22,7 +22,8 @@
 
 int main() {
     Test_Data t = {'x', 4.56f, 123, "hello from the test data struct! :D"};
-    Message m = serialize_Test_Data(&t);
+    Message m = {0};
+    serialize_Test_Data(&m, &t);
     Test_Data t2 = deserialize_Test_Data(&m);
 
     printf("t2.a = %c\n", t2.a);
@@ -30,9 +31,9 @@ int main() {
     printf("t2.c = %d\n", t2.c);
     printf("t2.d = %s\n", t2.d);
     printf("\n");
-    
+
     Vec2 pos = {-0.55f, -3.14159f};
-    m = serialize_Vec2(&pos);
+    serialize_Vec2(&m, &pos);
     Vec2 pos2 = deserialize_Vec2(&m);
 
     printf("pos2.x = %f\n", pos2.x);
