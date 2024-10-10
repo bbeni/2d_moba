@@ -102,6 +102,7 @@ int main() {
     // Receive until the peer closes the connection
 	int iResult = 0;
 	do {
+		received.length = 0; // reset
         iResult = recv(server_socket, received.data, MESSAGE_LEN, 0);
         if ( iResult > 0 ) {
 			printf("Bytes received: %d\n", iResult);
@@ -110,14 +111,14 @@ int main() {
 			printf("Server id: %u\n", state_sync.server_id);
 			printf("Welcome string: %s\n", state_sync.welcome_string);
 			
-		}
-        else if ( iResult == 0 )
+		} else if ( iResult == 0 ) {	
             printf("Connection closed\n");
-        else
+        } else {
             printf("recv failed: %d\n", WSAGetLastError());
-
+		}
+		Sleep(10);
+		
 	} while( iResult > 0 );
-
 
 	free(received.data);
 	

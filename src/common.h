@@ -21,7 +21,7 @@ typedef struct State_Sync {
 	enum Message_Type type;
 	
 	uint32_t server_id;
-	char welcome_string[256];
+	char welcome_string[512];
 } State_Sync;
 
 Message_Type read_message_type(Message message);

@@ -47,34 +47,83 @@ SOCKET setup_server(const char* ip_address, int port) {
 	return ListenSocket;
 }
 
-void shutdown_server(SOCKET listenSocket) {
-	closesocket(listenSocket);
+typedef struct Connected_Player {
+	uint32_t id;
+	SOCKET socket;
+	int x;
+	int y;
+} Connected_Player;
+
+#define MAX_PLAYERS 64
+
+static Connected_Player connected_players[MAX_PLAYERS];
+static int player_count = 0;
+
+bool add_player(SOCKET socket) {
+
+	if (player_count >= MAX_PLAYERS) {
+		return false;
+	}
+
+	connected_players[player_count++] = (Connected_Player) {
+		player_count,
+		socket,
+		0,
+		0,
+	};
+
+	return true;
+}
+
+
+DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
+
+	SOCKET socket = (SOCKET)passed_socket;
+	
+	if (!add_player(socket)) {
+		// TODO: reject new player with a message!
+		wprintf(L"Rejected player as we are already full\n");
+		closesocket(socket);
+	}
+
+	printf("Player connected %d/%d\n", player_count, MAX_PLAYERS);
+
+	while(1) {
+		State_Sync s = {
+			STATE_SYNC,
+			161,
+			"Hello this message is a routine message from the server! <3",
+		};
+		
+		Message msg = serialize_state_sync(&s);
+		send(socket, msg.data, msg.length, 0);
+		Sleep(100);
+	}
+	
+	closesocket(socket);
     WSACleanup();
 }
 
+void shutdown_server(SOCKET socket) {
+	closesocket(socket);
+    WSACleanup();
+	
+}
 
 int main(int argc, char** argv) {
 
 	SOCKET ListenSocket = setup_server(SERVER, PORT);
 
-	for (int i=0; i<3; i++) {	
+	while (true) {
 		SOCKET AcceptSocket;
 		wprintf(L"Waiting for client to connect on %s:%d ...\n", SERVER, PORT);
 		AcceptSocket = accept(ListenSocket, NULL, NULL);
 		if (AcceptSocket == INVALID_SOCKET) {
 			wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
 		} else {
-			wprintf(L"Client connected.\n");
+			CreateThread(NULL, 0, player_connection_thread, (LPVOID)AcceptSocket, 0, NULL);
 		}
 
-		State_Sync s = {
-			STATE_SYNC,
-			123,
-			"Hello this message is from the server! Welome home!",
-		};
-		
-		Message msg = serialize_state_sync(&s);
-		send(AcceptSocket, msg.data, msg.length, 0);
 	}
 
 	shutdown_server(ListenSocket);

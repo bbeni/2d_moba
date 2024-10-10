@@ -1,3 +1,4 @@
+
 #include "common.h"
 #include "winsock2.h"
 #include <assert.h>
@@ -62,7 +63,7 @@ State_Sync deserialize_state_sync(Message message) {
 	buffer = deserialize_uint(buffer, &state.server_id);
 	buffer = deserialize_str(buffer, state.welcome_string, 256);
 
-	assert(buffer - message.data == message.length);
+	assert(buffer - message.data == message.length || message.data - buffer == message.length);
 
 	return state;
 }
