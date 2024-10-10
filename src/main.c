@@ -88,52 +88,76 @@ bool connect_to_server() {
 }
 
 
-int main() {
+enum State {
+    WAITING_TO_CONNECT,
+    CONNECTED,
+};
+
+static enum State state = WAITING_TO_CONNECT;
+
+DWORD WINAPI connection_thread() {
 
     while (!connect_to_server()) {
         printf("Connecting to server...\n");
         Sleep(1000);
     }
 
+    state = CONNECTED;
+    printf("Connected\n");
 
     Message received = {0};
     received.data = malloc(MESSAGE_LEN);
 
-    // Receive until the peer closes the connection
-    int iResult = 0;
-    do {
+    int result = 1;
+    while(result > 0) {
         received.length = 0; // reset
-        iResult = recv(server_socket, received.data, MESSAGE_LEN, 0);
-        if ( iResult > 0 ) {
-            printf("Bytes received: %d\n", iResult);
-            received.length = iResult;
+        result = recv(server_socket, received.data, MESSAGE_LEN, 0);
+        if ( result > 0 ) {
+            //printf("Bytes received: %d\n", result);
+            received.length = result;
             State_Sync state_sync = deserialize_state_sync(received);
             printf("Server id: %u\n", state_sync.server_id);
             printf("Welcome string: %s\n", state_sync.welcome_string);
-
-        } else if ( iResult == 0 ) {
+        } else if ( result == 0 ) {
             printf("Connection closed\n");
         } else {
             printf("recv failed: %d\n", WSAGetLastError());
         }
         Sleep(10);
-
-    } while( iResult > 0 );
+    }
 
     free(received.data);
+    closesocket(server_socket);
+    WSACleanup();
 
     return 0;
+}
+
+int main() {
+
+
+    CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
 
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
 
     int w = WINDOW_WIDTH;
     int h = WINDOW_HEIGHT;
 
-
     while(!WindowShouldClose()) {
         BeginDrawing();
         ClearBackground(BG_COLOR);
-        DrawCircle(w/2, h/2, 200.0f, RED);
+
+        switch (state) {
+        case WAITING_TO_CONNECT:
+            DrawText("Connecting...", w/2, h/2, 64, GREEN);
+            break;
+        case CONNECTED:
+            DrawCircle(w/2, h/2, 200.0f, RED);
+            break;
+        }
+        
         EndDrawing();
     }
+
+    return 0;
 }
