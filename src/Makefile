@@ -19,7 +19,7 @@ server: $(BUILDDIR)/server.o $(BUILDDIR)/common.o
 	$(CC) -o $@ $^ $(SERVER_CFLAGS) $(SERVER_LIBS)
 
 $(BUILDDIR)/server.o: server.c $(BUILDDIR)
-	$(CC) -c -o $@ $< $(SERVER_CFLAGS)
+	$(CC) -c -o $@ $< $(SERVER_CFLAGS) 
 
 $(BUILDDIR)/common.o: common.c $(BUILDDIR)
 	$(CC) -c -o $@ $< $(SERVER_CFLAGS)

@@ -136,7 +136,6 @@ void serialize_char_array(Message* message, char* val, size_t length) {
     }
     message->length += length;
 }
-
 void* consume_uint32_t(void* buf, uint32_t* out) {
     *out = unpack_uint32_t(((uint32_t*)buf)[0]);
     return buf + 4;

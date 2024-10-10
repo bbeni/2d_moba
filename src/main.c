@@ -123,9 +123,9 @@ DWORD WINAPI connection_thread() {
         if ( result > 0 ) {
             //printf("Bytes received: %d\n", result);
             received.length = result;
-            State_Sync state_sync = deserialize_state_sync(received);
-            printf("Server id: %u\n", state_sync.server_id);
-            printf("Welcome string: %s\n", state_sync.welcome_string);
+            State_Sync state_sync = deserialize_State_Sync(&received);
+            printf("Server{name: %s, id: %d, n_players: %d}\n",
+                    state_sync.server_name, state_sync.server_id, state_sync.number_of_players);
         } else if ( result == 0 ) {
             printf("Connection closed\n");
         } else {

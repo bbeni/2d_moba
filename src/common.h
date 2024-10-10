@@ -2,6 +2,7 @@
 #define _COMMON_H_
 
 #include <stdint.h>
+#include "serializer.h"
 
 #define SERVER "127.0.0.1"
 #define PORT 27015
@@ -11,17 +12,13 @@ typedef enum Message_Type: char {
     PLAYER_INPUT,
 } Message_Type;
 
-typedef struct Message {
-    size_t length;
-    char* data;
-} Message;
-
-typedef struct State_Sync {
-    Message_Type type;
-
-    uint32_t server_id;
-    char welcome_string[512];
-} State_Sync;
+#define SER_STRUCT_NAME State_Sync
+#define SER_FIELDS                          \
+    SER_FIELD(uint32_t, server_id)          \
+    SER_ARRAY(char,     server_name, 36)    \
+    SER_FIELD(uint32_t, number_of_players) 
+#define SER_CREATE
+#include "serializer.h"    
 
 typedef enum Input_Flags: uint32_t {
     NOTHING_DOWN   = 0x0,
@@ -32,10 +29,8 @@ typedef enum Input_Flags: uint32_t {
 } Input_Flags;
 
 typedef struct Player_Input {
-    Message_Type type;
-
     Input_Flags input_flags;
-    float       angle_target;
+    float       target_angle;
 } Player_Input;
 
 Message_Type read_message_type(Message message);
