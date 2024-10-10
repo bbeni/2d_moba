@@ -25,6 +25,11 @@
 
 #define BG_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
 
+#define XBOX360_LEGACY_NAME_ID  "Xbox Controller"
+#define XBOX360_NAME_ID         "Xbox 360 Controller"
+#define PS3_NAME_ID             "Sony PLAYSTATION(R)3 Controller"
+static int gamepad = 0;
+
 
 // Networking stuff
 #define MESSAGE_LEN 512
@@ -153,17 +158,48 @@ DWORD WINAPI connection_thread() {
 
 int main() {
 
-
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
 
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
 
     int w = WINDOW_WIDTH;
     int h = WINDOW_HEIGHT;
 
+    SetTargetFPS(60);
+
     while(!WindowShouldClose()) {
+        
         BeginDrawing();
         ClearBackground(BG_COLOR);
+
+        if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
+        if (IsKeyPressed(KEY_RIGHT)) gamepad++;
+        
+        if (IsGamepadAvailable(gamepad)) {
+            DrawText(TextFormat("GP%d: %s", gamepad, GetGamepadName(gamepad)), 10, 10, 10, BLACK);
+           
+            DrawCircle(259, 152, 34, LIGHTGRAY);
+            DrawCircle(259 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X)*20), 152 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y)*20), 25, RED);
+            
+            // Draw buttons: basic
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_RIGHT)) DrawCircle(436, 150, 9, RED);
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_LEFT)) DrawCircle(352, 150, 9, RED);
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) DrawCircle(501, 151, 15, BLUE);
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) DrawCircle(536, 187, 15, LIME);
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) DrawCircle(572, 151, 15, MAROON);
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP)) DrawCircle(536, 115, 15, GOLD);
+
+
+            // Draw axis: left-right triggers
+            DrawRectangle(170, 30, 15, 70, GRAY);
+            DrawRectangle(604, 30, 15, 70, GRAY);
+            DrawRectangle(170, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70), RED);
+            DrawRectangle(604, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70), RED);
+
+        } else {
+            DrawText(TextFormat("No gamepad found (%d)", gamepad) , 10, 10, 10, ORANGE);
+        }
 
         switch (state) {
         case WAITING_TO_CONNECT:
@@ -178,8 +214,7 @@ int main() {
             DrawCircle(w/2, h/2, 200.0f, RED);
             break;
         }
-        
-        
+                
         EndDrawing();
     }
 

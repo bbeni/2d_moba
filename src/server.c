@@ -88,6 +88,8 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
 
     printf("Player connected %d/%d\n", player_count, MAX_PLAYERS);
 
+    temp_init(2048);
+
     while(1) {
         State_Sync s = {
             STATE_SYNC,
@@ -98,8 +100,11 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
         Message msg = serialize_state_sync(&s);
         send(socket, msg.data, msg.length, 0);
         Sleep(100);
+
+        temp_reset();
     }
 
+    temp_deinit();
     closesocket(socket);
     WSACleanup();
 }
