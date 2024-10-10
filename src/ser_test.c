@@ -1,3 +1,4 @@
+// Simple example for serializer.h 
 #define SERIALIZER_IMPLEMENTATION
 #include "serializer.h"
 #include <stdio.h>
