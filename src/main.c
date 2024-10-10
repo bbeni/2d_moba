@@ -91,6 +91,7 @@ bool connect_to_server() {
 enum State {
     WAITING_TO_CONNECT,
     CONNECTED,
+    RECONNECTING,
 };
 
 static enum State state = WAITING_TO_CONNECT;
@@ -110,8 +111,10 @@ DWORD WINAPI connection_thread() {
 
     int result = 1;
     while(result > 0) {
+
         received.length = 0; // reset
         result = recv(server_socket, received.data, MESSAGE_LEN, 0);
+        
         if ( result > 0 ) {
             //printf("Bytes received: %d\n", result);
             received.length = result;
@@ -122,6 +125,21 @@ DWORD WINAPI connection_thread() {
             printf("Connection closed\n");
         } else {
             printf("recv failed: %d\n", WSAGetLastError());
+
+            state = RECONNECTING;
+            printf("Reconnecting... \n");
+            
+            closesocket(server_socket);
+            WSACleanup();
+
+            while (!connect_to_server()) {
+                Sleep(300);
+            }
+
+            state = CONNECTED;
+            result = 1;
+            printf("Connected\n");
+
         }
         Sleep(10);
     }
@@ -149,12 +167,18 @@ int main() {
 
         switch (state) {
         case WAITING_TO_CONNECT:
-            DrawText("Connecting...", w/2, h/2, 64, GREEN);
+            const char* connecting_string = "Connecting to server...";
+            DrawText(connecting_string, w/2 - MeasureText(connecting_string, 100)/2, h/2 - 50, 100, GREEN);
+            break;
+        case RECONNECTING:
+            const char* reconnecting_string = "Reconnecting...";
+            DrawText(reconnecting_string, w/2 - MeasureText(reconnecting_string, 100)/2, h/2 - 50, 100, GREEN);
             break;
         case CONNECTED:
             DrawCircle(w/2, h/2, 200.0f, RED);
             break;
         }
+        
         
         EndDrawing();
     }
