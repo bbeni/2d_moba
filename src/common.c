@@ -2,9 +2,21 @@
 #define SERIALIZER_IMPLEMENTATION
 #include "serializer.h"
 
-#include "winsock2.h"
 #include <assert.h>
 #include <stdio.h>
+
+
+// network stuff
+
+void send_message(SOCKET socket, Message* msg, Message_Type type) {
+    extend_message_capacity(msg, 1);
+    msg->data[msg->length++] = (char)type;
+    send(socket, msg->data, msg->length, 0);
+}
+
+Message_Type extract_message_type(Message* msg) {
+    return (Message_Type)msg->data[--msg->length];
+}
 
 // my temp storage solution
 
@@ -43,3 +55,4 @@ void temp_deinit() {
         _temp_storage.capacity = 0;
     }
 }
+

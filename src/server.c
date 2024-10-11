@@ -54,8 +54,6 @@ typedef struct Connected_Player {
     int y;
 } Connected_Player;
 
-#define MAX_PLAYERS 64
-
 static Connected_Player connected_players[MAX_PLAYERS];
 static int player_count = 0;
 
@@ -89,20 +87,22 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
     printf("Player connected %d/%d\n", player_count, MAX_PLAYERS);
 
     Message msg = {0};
-
-    
+    size_t player_id = player_count - 1;
     
     while(1) {
 
         State_Sync s = (State_Sync){
             161,
             "SlimShady<3",
-            player_count
+            player_count,
+            {1.0f, 1.1f},
+            {2.1f, 2.1f},
+            player_id
         };
 
         serialize_State_Sync(&msg, &s);
-        send(socket, msg.data, msg.length, 0);
-        Sleep(10);
+        send_message(socket, &msg, STATE_SYNC);
+        Sleep(30);
     }
 
     closesocket(socket);

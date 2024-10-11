@@ -114,19 +114,27 @@ DWORD WINAPI connection_thread() {
     Message received = {0};
     received.data = malloc(MESSAGE_LEN);
 
-    int result = 1;
-    while(result > 0) {
+    int recv_code = 1;
+    while(recv_code > 0) {
 
         received.length = 0; // reset
-        result = recv(server_socket, received.data, MESSAGE_LEN, 0);
+        recv_code = recv(server_socket, received.data, MESSAGE_LEN, 0);
         
-        if ( result > 0 ) {
-            //printf("Bytes received: %d\n", result);
-            received.length = result;
+        if ( recv_code > 0 ) {
+            received.length = recv_code;
+            Message_Type type = extract_message_type(&received);
+            assert(type == STATE_SYNC);
+            
             State_Sync state_sync = deserialize_State_Sync(&received);
-            printf("Server{name: %s, id: %d, n_players: %d}\n",
-                    state_sync.server_name, state_sync.server_id, state_sync.number_of_players);
-        } else if ( result == 0 ) {
+            printf("Server_Sync{server_name: %s, id: %d, n_players: %d, my_id: %d, my position: (%f, %f)}\n",
+                    state_sync.server_name,
+                    state_sync.server_id,
+                    state_sync.number_of_players,
+                    state_sync.player_id,
+                    state_sync.xs[state_sync.player_id],
+                    state_sync.ys[state_sync.player_id]
+            );
+        } else if ( recv_code == 0 ) {
             printf("Connection closed\n");
         } else {
             printf("recv failed: %d\n", WSAGetLastError());
@@ -142,7 +150,7 @@ DWORD WINAPI connection_thread() {
             }
 
             state = CONNECTED;
-            result = 1;
+            recv_code = 1;
             printf("Connected\n");
 
         }

@@ -77,7 +77,9 @@ void* consume_char(void* buf, char* out);
 
 // TODO: make array versions for all above
 void serialize_char_array(Message* message, char* val, size_t length);
+void serialize_float_array(Message* message, float* val, size_t length);
 void* consume_char_array(void* buf, char* out, size_t length);
+void* consume_float_array(void* buf, float* out, size_t length);
 
 #endif // _SERIALIZER_H_
 
@@ -136,6 +138,15 @@ void serialize_char_array(Message* message, char* val, size_t length) {
     }
     message->length += length;
 }
+
+#include <stdio.h>
+
+void serialize_float_array(Message* message, float* val, size_t length) {
+    for (int i = 0; i < length; i++) {
+        serialize_float(message, val[i]);
+    }
+}
+
 void* consume_uint32_t(void* buf, uint32_t* out) {
     *out = unpack_uint32_t(((uint32_t*)buf)[0]);
     return buf + 4;
@@ -156,6 +167,13 @@ void* consume_char_array(void* buf, char* out, size_t length) {
         out[i] = ((char*)buf)[i];
     }
     return buf + length;
+}
+
+void* consume_float_array(void* buf, float* out, size_t length) {
+    for(int i = 0; i < length; i++) {
+        buf = consume_float(buf, &out[i]);
+    }
+    return buf;
 }
 
 #endif // SERIALIZER_IMPLEMENTATION
