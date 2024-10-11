@@ -1,10 +1,65 @@
 #include "common.h"
 #define SERIALIZER_IMPLEMENTATION
 #include "serializer.h"
+#include "mathematics.h"
 
 #include <assert.h>
 #include <stdio.h>
 
+// game_stuff
+
+Game_World g_world = {0};
+
+void tick() {
+    int count = g_world.player_count;
+    for (int i=0; i<count; i++) {
+        move_towards_on_circle(
+            &g_world.player_angles[i],
+            g_world.player_target_angles[i],
+            ANGLE_SPEED,
+            1.0f);
+    }
+
+    for (int i=0; i<count; i++) {
+        float angle = g_world.player_angles[i];
+        float dx = cosf(angle) * SPEED;
+        float dy = sinf(angle) * SPEED;
+        g_world.player_xs[i] += dx;
+        g_world.player_ys[i] += dy;
+
+        // periodic boundary
+        if (g_world.player_xs[i] > WORLD_WIDTH) {
+            g_world.player_xs[i] -= WORLD_WIDTH;
+        };        
+        if (g_world.player_xs[i] < 0) {
+            g_world.player_xs[i] += WORLD_WIDTH;
+        };        
+        if (g_world.player_ys[i] > WORLD_HEIGHT) {
+            g_world.player_ys[i] -= WORLD_HEIGHT;
+        };        
+        if (g_world.player_ys[i] < 0) {
+            g_world.player_ys[i] += WORLD_HEIGHT;
+        };        
+    }
+};
+
+void add_player() {
+    int index = g_world.player_count;
+    if (index >= MAX_PLAYERS) {
+        printf("MAX_PLAYERS already full.\n");
+        return;
+    }
+    g_world.player_count++;
+
+    float x = (index*123819 + 2) % WORLD_WIDTH;
+    float y = (index*index*1238 + 4) % WORLD_HEIGHT;
+
+    // make sure all fields are set!
+    g_world.player_xs[index] = x;
+    g_world.player_ys[index] = y;
+    g_world.player_angles[index] = 0.0f;
+    g_world.player_target_angles[index] = M_PI * 0.5f;   
+}
 
 // network stuff
 

@@ -6,7 +6,6 @@
     #define NOUSER            // All USER defines and routines
 #endif
 
-
 //#include <Windows.h> // or any library that uses Windows.h ...
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
@@ -17,8 +16,8 @@
     #undef far
 #endif
 
-
 #include "common.h"
+#include "mathematics.h"
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 900
@@ -29,7 +28,6 @@
 #define XBOX360_NAME_ID         "Xbox 360 Controller"
 #define PS3_NAME_ID             "Sony PLAYSTATION(R)3 Controller"
 static int gamepad = 0;
-
 
 // Networking stuff
 #define MESSAGE_LEN 512
@@ -164,6 +162,66 @@ DWORD WINAPI connection_thread() {
     return 0;
 }
 
+void draw_game() {
+    size_t count = g_world.player_count;
+    for (int i=0; i<count; i++) {
+        float angle = g_world.player_angles[i];
+        float x = g_world.player_xs[i];
+        float y = g_world.player_ys[i];
+        float dx = cosf(angle);
+        float dy = sinf(angle);
+        Vec2 dir = {dx, dy};
+        Vec2 offset = scale(&dir, 30.f);
+        Vec2 right = {-offset.y, offset.x};
+        Vec2 pos = {x, y};
+        Vec2 nose = add(&pos, &offset);
+        Vec2 rear_right = add(&pos, &right);
+        rear_right = sub(&rear_right, &offset);
+        Vec2 rear_left = sub(&pos, &right);
+        rear_left = sub(&rear_left, &offset);
+
+        DrawTriangle(
+             (Vector2){nose.x, nose.y},
+             (Vector2){rear_left.x, rear_left.y},
+             (Vector2){rear_right.x, rear_right.y},
+             (Color){(i*681)%(255), 50*i, 220, 255});
+
+    }
+}
+
+void draw_gamepad() {
+    int w = 1150;
+    int h = 80;
+    DrawRectangle(w+160, 0, 370, 130, BLACK);
+    DrawCircle(w+259, 152 - h, 34, LIGHTGRAY);
+    DrawCircle(w+259 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X)*20), 152 - h + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y)*20), 25, RED);
+    
+    // Draw buttons: basic
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_RIGHT)) DrawCircle(w+236, 150 - h, 9, RED);
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_LEFT)) DrawCircle(w+152, 150 - h, 9, RED);
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) DrawCircle(w+301, 151 - h, 15, BLUE);
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) DrawCircle(w+336, 187 - h, 15, LIME);
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) DrawCircle(w+372, 151 - h, 15, MAROON);
+    if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP)) DrawCircle(w+336, 115 - h, 15, GOLD);
+    
+
+    // Draw axis: left-right triggers
+    DrawRectangle(w+190, 30, 15, 70, GRAY);
+    DrawRectangle(w+404, 30, 15, 70, GRAY);
+    DrawRectangle(w+190, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70), RED);
+    DrawRectangle(w+404, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70), RED);
+}
+
+void draw_stats() {
+    Color text_color = ORANGE;
+    if (IsGamepadAvailable(gamepad)) {   
+        DrawText(TextFormat("GP%d: %s", gamepad, GetGamepadName(gamepad)), 10, 10, 20, text_color);
+    } else {
+        DrawText(TextFormat("No gamepad found (%d)", gamepad) , 10, 10, 20, text_color);
+    }
+    DrawText(TextFormat("FPS: %d", GetFPS()), 10, 40, 20, text_color);
+}
+
 int main() {
 
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
@@ -174,39 +232,42 @@ int main() {
     int w = WINDOW_WIDTH;
     int h = WINDOW_HEIGHT;
 
-    SetTargetFPS(60);
+    add_player();
+    add_player();
+
+    SetTargetFPS(1000/TICK_TIME);
 
     while(!WindowShouldClose()) {
         
         BeginDrawing();
         ClearBackground(BG_COLOR);
+        draw_stats();
 
         if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
         if (IsKeyPressed(KEY_RIGHT)) gamepad++;
         
         if (IsGamepadAvailable(gamepad)) {
-            DrawText(TextFormat("GP%d: %s", gamepad, GetGamepadName(gamepad)), 10, 10, 10, BLACK);
-           
-            DrawCircle(259, 152, 34, LIGHTGRAY);
-            DrawCircle(259 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X)*20), 152 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y)*20), 25, RED);
+
+            draw_gamepad();
             
-            // Draw buttons: basic
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_RIGHT)) DrawCircle(436, 150, 9, RED);
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_LEFT)) DrawCircle(352, 150, 9, RED);
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) DrawCircle(501, 151, 15, BLUE);
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) DrawCircle(536, 187, 15, LIME);
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) DrawCircle(572, 151, 15, MAROON);
-            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP)) DrawCircle(536, 115, 15, GOLD);
-
-
-            // Draw axis: left-right triggers
-            DrawRectangle(170, 30, 15, 70, GRAY);
-            DrawRectangle(604, 30, 15, 70, GRAY);
-            DrawRectangle(170, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_TRIGGER))/2)*70), RED);
-            DrawRectangle(604, 30, 15, (int)(((1 + GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_RIGHT_TRIGGER))/2)*70), RED);
-
-        } else {
-            DrawText(TextFormat("No gamepad found (%d)", gamepad) , 10, 10, 10, ORANGE);
+            float x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
+            float y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
+            Vec2 pad_vec = (Vec2){x_axis, y_axis};
+            if (length(&pad_vec) > 0.35f) {
+                Vec2 dir = pad_vec;
+                normalize_or_y_axis(&dir);
+                const Vec2 right = (Vec2){1.0f, 0.0f};
+                float angle = -angle_between(&dir, &right);
+                printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
+                if (g_world.player_count > 0) {
+                    g_world.player_target_angles[0] = angle;
+                }
+            } else {
+                if (g_world.player_count > 0) {
+                    g_world.player_target_angles[0] = g_world.player_angles[0];
+                }
+            }
+            
         }
 
         switch (state) {
@@ -219,9 +280,12 @@ int main() {
             DrawText(reconnecting_string, w/2 - MeasureText(reconnecting_string, 100)/2, h/2 - 50, 100, GREEN);
             break;
         case CONNECTED:
-            DrawCircle(w/2, h/2, 200.0f, RED);
+            DrawCircle(w/2, h/2, 50.0f, RED);
             break;
         }
+
+        tick();
+        draw_game();
                 
         EndDrawing();
     }

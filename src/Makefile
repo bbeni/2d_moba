@@ -12,10 +12,10 @@ SERVER_LIBS=-lws2_32
 .PHONY: all
 all: main server
 
-main: $(BUILDDIR)/main.o $(BUILDDIR)/common.o
+main: $(BUILDDIR)/main.o $(BUILDDIR)/common.o $(BUILDDIR)/mathematics.o 
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
-server: $(BUILDDIR)/server.o $(BUILDDIR)/common.o
+server: $(BUILDDIR)/server.o $(BUILDDIR)/common.o $(BUILDDIR)/mathematics.o 
 	$(CC) -o $@ $^ $(SERVER_CFLAGS) $(SERVER_LIBS)
 
 $(BUILDDIR)/server.o: server.c $(BUILDDIR)
@@ -25,6 +25,9 @@ $(BUILDDIR)/common.o: common.c $(BUILDDIR)
 	$(CC) -c -o $@ $< $(SERVER_CFLAGS)
 
 $(BUILDDIR)/main.o: main.c $(BUILDDIR)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+$(BUILDDIR)/%.o: %.c $(BUILDDIR)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(BUILDDIR):

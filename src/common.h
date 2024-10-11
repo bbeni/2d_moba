@@ -5,9 +5,33 @@
 #include <stdint.h>
 #include "serializer.h"
 
+// Configuration
+
 #define SERVER "127.0.0.1"
 #define PORT 27015
 #define MAX_PLAYERS 24
+#define TICK_TIME 20 // milliseconds
+#define SPEED 9.5f // units per tick
+#define ANGLE_SPEED 0.08f // radians per tick
+#define WORLD_WIDTH 1600
+#define WORLD_HEIGHT 900
+
+// Game stuff
+
+typedef struct Game_World {
+    size_t player_count;
+    float player_xs[MAX_PLAYERS];
+    float player_ys[MAX_PLAYERS];
+    float player_angles[MAX_PLAYERS];
+    float player_target_angles[MAX_PLAYERS];
+} Game_World;
+
+extern Game_World g_world;
+
+void tick();
+void add_player();
+
+// Networking stuff
 
 typedef enum Message_Type: char {
     STATE_SYNC,     // TODO: remove or rename it
