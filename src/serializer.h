@@ -101,11 +101,12 @@ void extend_message_capacity(Message* message, size_t size) {
     if (message->length + size > message->capacity) {
         if (message->capacity == 0) {
             message->capacity = MESSAGE_INITIAL_CAPACITY;
-        } else {
-            while(message->length + size > message->capacity) {
-                message->capacity *= 2;
-            }
         }
+        
+        while(message->length + size > message->capacity) {
+            message->capacity *= 2;
+        }
+        
         message->data = MESSAGE_REALLOC(message->data, message->capacity);
         assert(message->data != NULL && "cant realloc more space...");
     }
