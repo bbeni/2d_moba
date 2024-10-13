@@ -108,32 +108,46 @@ DWORD WINAPI connection_thread() {
     state = CONNECTED;
     printf("connection_thread: connected, starting\n");
 
-    //Message msg_buffer = {0};
-    //extend_message_capacity(&msg_buffer, MESSAGE_MAX_LEN);
-
     Message received = {0};
     extend_message_capacity(&received, MESSAGE_MAX_LEN);
 
-    int recv_code = 1;
-    while(recv_code > 0) {
+    Message to_send = {0};
+    extend_message_capacity(&to_send, MESSAGE_MAX_LEN);
+
+    // set non-blocking
+    u_long option = 1;
+    int error = ioctlsocket(server_socket, FIONBIO, &option);
+    while (error != 0) {
+        printf("setting non-block socket failed: ioctlsocket failed with error: %d, %d\n", error, WSAGetLastError());
+        Sleep(1000);
+        error = ioctlsocket(server_socket, FIONBIO, &option);
+    }
+
+    while(true) {
 
         received.length = 0; // reset
-        recv_code = recv(server_socket, received.data, MESSAGE_MAX_LEN, 0);
-        
-        if ( recv_code > 0 ) {
+        to_send.length = 0;  // reset
+
+        int recv_code = recv(server_socket, received.data, MESSAGE_MAX_LEN, 0);
+
+        if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
+            // we have no message so we could send something else!
+            
+        } else if ( recv_code > 0 ) {
+            // we got a message yay !
             received.length = recv_code;
             Message_Type type = extract_message_type(&received);
             assert(type == STATE_SYNC);
             
             State_Sync state_sync = deserialize_State_Sync(&received);
             printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
-                    state_sync.number_of_players,
-                    state_sync.player_id,
-                    state_sync.xs[state_sync.player_id],
-                    state_sync.ys[state_sync.player_id],
-                    state_sync.accumulated_time,
-                    state_sync.ticks
-                    );
+            state_sync.number_of_players,
+            state_sync.player_id,
+            state_sync.xs[state_sync.player_id],
+            state_sync.ys[state_sync.player_id],
+            state_sync.accumulated_time,
+            state_sync.ticks
+            );
             g_world.time.accumulated_time = (double)state_sync.accumulated_time;
             g_world.player_count = state_sync.number_of_players;
             g_world.ticks = state_sync.ticks;
@@ -143,25 +157,27 @@ DWORD WINAPI connection_thread() {
             memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
 
         } else if ( recv_code == 0 ) {
-            printf("Connection closed\n");
+            // the server wants to go
+            printf("connection closed\n");
+            break;
         } else {
+            // it is and error!
             printf("recv failed: %d\n", WSAGetLastError());
-
-            state = RECONNECTING;
-            printf("Reconnecting... \n");
             
+            state = RECONNECTING;
+            printf("Reconnecting...\n");
             closesocket(server_socket);
             WSACleanup();
 
             while (!connect_to_server()) {
-                Sleep(300);
+                Sleep(2000);
             }
 
             state = CONNECTED;
-            recv_code = 1;
-            printf("Connected\n");
+            printf("Reconnected\n");
 
         }
+ 
         Sleep(10);
     }
 
