@@ -48,6 +48,11 @@ SOCKET setup_server(const char* ip_address, int port) {
     return ListenSocket;
 }
 
+enum Server_State {
+    IN_LOBBY,
+    IN_GAME,
+};
+
 typedef struct Connected_Player {
     uint32_t id;
     SOCKET socket;
@@ -58,6 +63,7 @@ typedef struct Connected_Player {
 
 // should be in sync with g_world.player_...
 static Connected_Player connected_players[MAX_PLAYERS] = { 0 };
+static enum Server_State server_state = IN_LOBBY;
 
 bool add_player_connection(SOCKET socket) {
 
@@ -96,57 +102,71 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
     extend_message_capacity(&msg, MESSAGE_MAX_LEN);
 
     size_t player_id = g_world.player_count - 1;
-    
+
     while(true) {
 
-        if (!connected_players[player_id].is_up_to_date) {
-            connected_players[player_id].is_up_to_date = true;
-            
+        switch (server_state) {
+        case IN_LOBBY: {
             printf("Sending State_Sync to player with id %llu\n", player_id);
-            State_Sync s = (State_Sync){
-                161,
-                player_id,
+            Lobby_Sync s = (Lobby_Sync){
                 g_world.player_count,
-                g_world.ticks,
-                (float)g_world.time.accumulated_time,
             };
-            
-            memcpy(s.xs, g_world.player_xs, 4*MAX_PLAYERS);
-            memcpy(s.ys, g_world.player_ys, 4*MAX_PLAYERS);
-            memcpy(s.angles, g_world.player_angles, 4*MAX_PLAYERS);
-            memcpy(s.target_angles, g_world.player_target_angles, 4*MAX_PLAYERS);
+            serialize_Lobby_Sync(&msg, &s);
+            send_message(socket, &msg, LOBBY_SYNC);
+        } break;
+        case IN_GAME: {
+            if (!connected_players[player_id].is_up_to_date) {
+                connected_players[player_id].is_up_to_date = true;
 
-            serialize_State_Sync(&msg, &s);
-            send_message(socket, &msg, STATE_SYNC);
-            
-        } else if(false) {
-            
-            u_long bytes_available = 0;
-            ioctlsocket(socket, FIONREAD, &bytes_available);
-            
-            if (bytes_available > 0) {
-                int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
-                if ( recv_code == 0 ) {
-                    printf("Player connection closed\n");
-                    break;
-                } else if ( recv_code < 0) {
-                    printf("recv failed: %d\n", WSAGetLastError());
-                    closesocket(socket);
-                    WSACleanup();
-                    break;
+                printf("Sending State_Sync to player with id %llu\n", player_id);
+                State_Sync s = (State_Sync){
+                    161,
+                    player_id,
+                    g_world.player_count,
+                    g_world.ticks,
+                    (float)g_world.time.accumulated_time,
+                };
+
+                memcpy(s.xs, g_world.player_xs, 4*MAX_PLAYERS);
+                memcpy(s.ys, g_world.player_ys, 4*MAX_PLAYERS);
+                memcpy(s.angles, g_world.player_angles, 4*MAX_PLAYERS);
+                memcpy(s.target_angles, g_world.player_target_angles, 4*MAX_PLAYERS);
+
+                serialize_State_Sync(&msg, &s);
+                send_message(socket, &msg, STATE_SYNC);
+
+            } else if(false) {
+
+                u_long bytes_available = 0;
+                ioctlsocket(socket, FIONREAD, &bytes_available);
+
+                if (bytes_available > 0) {
+                    int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
+                    if ( recv_code == 0 ) {
+                        printf("Player connection closed\n");
+                        break;
+                    } else if ( recv_code < 0) {
+                        printf("recv failed: %d\n", WSAGetLastError());
+                        closesocket(socket);
+                        WSACleanup();
+                        break;
+                    }
+
+                    // we have a message from the client to handle
+                    msg.length = recv_code;
+                    Message_Type type = extract_message_type(&msg);
+                    assert(type == PLAYER_INPUT);
+
+                    connected_players[player_id].input = deserialize_Player_Input(&msg);
+
                 }
-
-                // we have a message from the client to handle
-                msg.length = recv_code;
-                Message_Type type = extract_message_type(&msg);
-                assert(type == PLAYER_INPUT);
-
-                connected_players[player_id].input = deserialize_Player_Input(&msg);
-                
             }
+        } break;
+        default:
+            assert(false && "unhandled server state");
         }
-        
-        Sleep(5);
+
+        Sleep(10);
     }
 
     closesocket(socket);
@@ -172,7 +192,7 @@ DWORD WINAPI connection_manager_thread(LPVOID passed_socket) {
         } else {
             CreateThread(NULL, 0, player_connection_thread, (LPVOID)AcceptSocket, 0, NULL);
         }
-        
+
         Sleep(1);
     }
 }
@@ -184,22 +204,30 @@ int main(int argc, char** argv) {
     CreateThread(NULL, 0, connection_manager_thread, (LPVOID)connection_socket, 0, NULL);
 
     if (!start_game_time()) return 1;
-    
+
     while(true) {
 
-        while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
-            handle_inputs();
-            tick();
-        
-            if (g_world.ticks % 50 == 0) {
-                printf("Requesting sync tick=%u\n", g_world.ticks);
-                for (int i = 0; i < g_world.player_count; i++) {
-                    connected_players[i].is_up_to_date = false;
+        switch (server_state) {
+        case IN_LOBBY:
+            break;
+        case IN_GAME: {
+            while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
+                handle_inputs();
+                tick();
+
+                if (g_world.ticks % 50 == 0) {
+                    printf("Requesting sync tick=%u\n", g_world.ticks);
+                    for (int i = 0; i < g_world.player_count; i++) {
+                        connected_players[i].is_up_to_date = false;
+                    }
                 }
             }
+            wait_game_time();
+        } break;
+        default:
+            assert(false && "unhandled server state in main");
+            break;
         }
-        
-        wait_game_time();
     }
 
     shutdown_server(connection_socket);

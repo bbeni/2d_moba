@@ -50,7 +50,9 @@ void add_player();
 #define MESSAGE_MAX_LEN 512
 
 typedef enum Message_Type: char {
-    STATE_SYNC,     // TODO: remove or rename it
+    GAME_START,
+    LOBBY_SYNC,
+    STATE_SYNC,
     PLAYER_INPUT,
 } Message_Type;
 
@@ -66,7 +68,13 @@ typedef enum Message_Type: char {
     SER_ARRAY(float,    angles, MAX_PLAYERS) \
     SER_ARRAY(float,    target_angles, MAX_PLAYERS)
 #define SER_CREATE
-#include "serializer.h"    
+#include "serializer.h"
+
+#define SER_STRUCT_NAME Lobby_Sync
+#define SER_FIELDS \
+    SER_FIELD(uint32_t, number_of_players)
+#define SER_CREATE
+#include "serializer.h"
 
 typedef enum : uint32_t {
     NOTHING_DOWN   = 0x0,

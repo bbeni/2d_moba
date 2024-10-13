@@ -102,7 +102,6 @@ void extend_message_capacity(Message* message, size_t size) {
         if (message->capacity == 0) {
             message->capacity = MESSAGE_INITIAL_CAPACITY;
         }
-        
         while(message->length + size > message->capacity) {
             message->capacity *= 2;
         }

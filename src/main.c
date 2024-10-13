@@ -2,8 +2,8 @@
 #include <stdio.h>
 
 #if defined(_WIN32)
-    #define NOGDI             // All GDI defines and routines
-    #define NOUSER            // All USER defines and routines
+#define NOGDI             // All GDI defines and routines
+#define NOUSER            // All USER defines and routines
 #endif
 
 //#include <Windows.h> // or any library that uses Windows.h ...
@@ -12,8 +12,8 @@
 #include <ws2tcpip.h>
 
 #if defined(_WIN32)           // raylib uses these names as function parameters
-    #undef near
-    #undef far
+#undef near
+#undef far
 #endif
 
 #include "common.h"
@@ -66,7 +66,7 @@ bool connect_to_server() {
         wprintf(L"connect function failed with error: %ld\n", WSAGetLastError());
         iResult = closesocket(ConnectSocket);
         if (iResult == SOCKET_ERROR)
-            wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
+        wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
         WSACleanup();
         return false;
     }
@@ -91,7 +91,8 @@ bool connect_to_server() {
 
 enum State {
     WAITING_TO_CONNECT,
-    CONNECTED,
+    CONNECTED_LOBBY,
+    CONNECTED_GAME,
     RECONNECTING,
 };
 
@@ -105,7 +106,7 @@ DWORD WINAPI connection_thread() {
         Sleep(1000);
     }
 
-    state = CONNECTED;
+    state = CONNECTED_LOBBY;
     printf("connection_thread: connected, starting\n");
 
     Message received = {0};
@@ -132,60 +133,79 @@ DWORD WINAPI connection_thread() {
 
         if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
             // we have no message so we could send something else!
-            
+
         } else if ( recv_code > 0 ) {
             // we got a message yay !
             received.length = recv_code;
             Message_Type type = extract_message_type(&received);
-            assert(type == STATE_SYNC);
-            
-            State_Sync state_sync = deserialize_State_Sync(&received);
-            printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
-            state_sync.number_of_players,
-            state_sync.player_id,
-            state_sync.xs[state_sync.player_id],
-            state_sync.ys[state_sync.player_id],
-            state_sync.accumulated_time,
-            state_sync.ticks
-            );
-            g_world.time.accumulated_time = (double)state_sync.accumulated_time;
-            g_world.player_count = state_sync.number_of_players;
-            g_world.ticks = state_sync.ticks;
-            memcpy(g_world.player_xs, state_sync.xs, 4*MAX_PLAYERS);
-            memcpy(g_world.player_ys, state_sync.ys, 4*MAX_PLAYERS);
-            memcpy(g_world.player_angles, state_sync.angles, 4*MAX_PLAYERS);
-            memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
 
-        } else if ( recv_code == 0 ) {
-            // the server wants to go
-            printf("connection closed\n");
-            break;
-        } else {
-            // it is and error!
-            printf("recv failed: %d\n", WSAGetLastError());
-            
-            state = RECONNECTING;
-            printf("Reconnecting...\n");
-            closesocket(server_socket);
-            WSACleanup();
-
-            while (!connect_to_server()) {
-                Sleep(2000);
-            }
-
-            state = CONNECTED;
-            printf("Reconnected\n");
-
+            switch(type) {
+            case STATE_SYNC: {
+                State_Sync state_sync = deserialize_State_Sync(&received);
+                printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
+                state_sync.number_of_players,
+                state_sync.player_id,
+                state_sync.xs[state_sync.player_id],
+                state_sync.ys[state_sync.player_id],
+                state_sync.accumulated_time,
+                state_sync.ticks
+                );
+                g_world.time.accumulated_time = (double)state_sync.accumulated_time;
+                g_world.player_count = state_sync.number_of_players;
+                g_world.ticks = state_sync.ticks;
+                memcpy(g_world.player_xs, state_sync.xs, 4*MAX_PLAYERS);
+                memcpy(g_world.player_ys, state_sync.ys, 4*MAX_PLAYERS);
+                memcpy(g_world.player_angles, state_sync.angles, 4*MAX_PLAYERS);
+                memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
+            } break;
+            case LOBBY_SYNC: {
+                Lobby_Sync lobby_sync = deserialize_Lobby_Sync(&received);
+                state = CONNECTED_LOBBY;
+                printf("Lobby_Sync{n_players: %d}\n", lobby_sync.number_of_players);
+            } break;
+            case GAME_START: {
+                printf("Game_Start{}\n");
+            } break;
+        default:
+            assert(false && "go unknown type of message");
         }
- 
-        Sleep(10);
+
+
+    } else if ( recv_code == 0 ) {
+        // the server wants to go
+        printf("connection closed\n");
+        break;
+    } else {
+        // it is and error!
+        printf("recv failed: %d\n", WSAGetLastError());
+
+        state = RECONNECTING;
+        printf("Reconnecting...\n");
+        closesocket(server_socket);
+        WSACleanup();
+
+        while (!connect_to_server()) {
+            Sleep(2000);
+        }
+
+        state = CONNECTED_LOBBY;
+        printf("Reconnected\n");
+
     }
 
-    free(received.data);
-    closesocket(server_socket);
-    WSACleanup();
+    Sleep(10);
+}
 
-    return 0;
+free(received.data);
+closesocket(server_socket);
+WSACleanup();
+
+return 0;
+}
+
+void draw_lobby() {
+    const char* lobby_text = "Lobby";
+    DrawText(lobby_text, WINDOW_WIDTH/2 - MeasureText(lobby_text, 100)/2, WINDOW_HEIGHT/2 - 100/2, 100, YELLOW);
 }
 
 void draw_game() {
@@ -207,10 +227,10 @@ void draw_game() {
         rear_left = sub(&rear_left, &offset);
 
         DrawTriangle(
-             (Vector2){nose.x, nose.y},
-             (Vector2){rear_left.x, rear_left.y},
-             (Vector2){rear_right.x, rear_right.y},
-             (Color){(i*681)%(255), 50*i, 220, 255});
+        (Vector2){nose.x, nose.y},
+        (Vector2){rear_left.x, rear_left.y},
+        (Vector2){rear_right.x, rear_right.y},
+        (Color){(i*681)%(255), 50*i, 220, 255});
 
     }
 }
@@ -221,7 +241,7 @@ void draw_gamepad() {
     DrawRectangle(w+160, 0, 370, 130, BLACK);
     DrawCircle(w+259, 152 - h, 34, LIGHTGRAY);
     DrawCircle(w+259 + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X)*20), 152 - h + (int)(GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y)*20), 25, RED);
-    
+
     // Draw buttons: basic
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_RIGHT)) DrawCircle(w+236, 150 - h, 9, RED);
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_MIDDLE_LEFT)) DrawCircle(w+152, 150 - h, 9, RED);
@@ -229,7 +249,7 @@ void draw_gamepad() {
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) DrawCircle(w+336, 187 - h, 15, LIME);
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) DrawCircle(w+372, 151 - h, 15, MAROON);
     if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_UP)) DrawCircle(w+336, 115 - h, 15, GOLD);
-    
+
 
     // Draw axis: left-right triggers
     DrawRectangle(w+190, 30, 15, 70, GRAY);
@@ -240,7 +260,7 @@ void draw_gamepad() {
 
 void draw_stats() {
     Color text_color = ORANGE;
-    if (IsGamepadAvailable(gamepad)) {   
+    if (IsGamepadAvailable(gamepad)) {
         DrawText(TextFormat("GP%d: %s", gamepad, GetGamepadName(gamepad)), 10, 10, 20, text_color);
     } else {
         DrawText(TextFormat("No gamepad found (%d)", gamepad) , 10, 10, 20, text_color);
@@ -253,7 +273,7 @@ int main() {
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
 
     if (!start_game_time()) return 1;
-    
+
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
 
@@ -263,13 +283,13 @@ int main() {
     while(true) {
 
         // Handle Input
-        
+
         if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
         if (IsKeyPressed(KEY_RIGHT)) gamepad++;
 
-        float target_angle = g_world.player_angles[my_id];        
+        float target_angle = g_world.player_angles[my_id];
         if (IsGamepadAvailable(gamepad) && my_id < g_world.player_count) {
-            
+
             float x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
             float y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
             Vec2 pad_vec = (Vec2){x_axis, y_axis};
@@ -288,10 +308,7 @@ int main() {
             //input.target_angle = target_angle;
         }
 
-        //printf("acc time: %f, tick time done: %f\n", g_world.time.accumulated_time, g_world.ticks * TICK_TIME);
-        while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
-            tick();
-        }
+
 
         if (WindowShouldClose()) break;
 
@@ -312,12 +329,23 @@ int main() {
             const char* reconnecting_string = "Reconnecting...";
             DrawText(reconnecting_string, w/2 - MeasureText(reconnecting_string, 100)/2, h/2 - 50, 100, GREEN);
             break;
-        case CONNECTED:
-            DrawCircle(w/2, h/2, 50.0f, RED);
+            case CONNECTED_LOBBY: {
+                draw_lobby();
+            } break;
+            case CONNECTED_GAME: {
+                //printf("acc time: %f, tick time done: %f\n", g_world.time.accumulated_time, g_world.ticks * TICK_TIME);
+                while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
+                    tick();
+                }
+
+                draw_game();
+                DrawCircle(w/2, h/2, 50.0f, RED);
+            } break;
+        default:
+            assert(false && "unhandeled state in main");
             break;
         }
 
-        draw_game();
         EndDrawing();
 
         wait_game_time();
