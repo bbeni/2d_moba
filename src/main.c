@@ -112,7 +112,7 @@ DWORD WINAPI connection_thread() {
     //extend_message_capacity(&msg_buffer, MESSAGE_MAX_LEN);
 
     Message received = {0};
-    received.data = malloc(MESSAGE_MAX_LEN);
+    extend_message_capacity(&received, MESSAGE_MAX_LEN);
 
     int recv_code = 1;
     while(recv_code > 0) {
@@ -272,7 +272,7 @@ int main() {
             //input.target_angle = target_angle;
         }
 
-        printf("acc time: %f, tick time done: %f\n", g_world.time.accumulated_time, g_world.ticks * TICK_TIME);
+        //printf("acc time: %f, tick time done: %f\n", g_world.time.accumulated_time, g_world.ticks * TICK_TIME);
         while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
             tick();
         }
