@@ -126,13 +126,15 @@ DWORD WINAPI connection_thread() {
             assert(type == STATE_SYNC);
             
             State_Sync state_sync = deserialize_State_Sync(&received);
-            printf("Server_Sync{id: %d, n_players: %d, my_id: %d, my position: (%f, %f)}\n",
-                    state_sync.server_id,
+            printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
                     state_sync.number_of_players,
                     state_sync.player_id,
                     state_sync.xs[state_sync.player_id],
-                    state_sync.ys[state_sync.player_id]
+                    state_sync.ys[state_sync.player_id],
+                    state_sync.accumulated_time,
+                    state_sync.ticks
                     );
+            g_world.time.accumulated_time = (double)state_sync.accumulated_time;
             g_world.player_count = state_sync.number_of_players;
             g_world.ticks = state_sync.ticks;
             memcpy(g_world.player_xs, state_sync.xs, 4*MAX_PLAYERS);
@@ -270,6 +272,7 @@ int main() {
             //input.target_angle = target_angle;
         }
 
+        printf("acc time: %f, tick time done: %f\n", g_world.time.accumulated_time, g_world.ticks * TICK_TIME);
         while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
             tick();
         }

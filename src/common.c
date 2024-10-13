@@ -43,7 +43,7 @@ void tick() {
     }
     
     g_world.ticks++;
-    //printf("Tick Tock: %u\n", g_world.ticks);
+    printf("Tick Tock: %u\n", g_world.ticks);
 };
 
 void add_player() {

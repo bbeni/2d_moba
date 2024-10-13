@@ -108,6 +108,7 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
                 player_id,
                 g_world.player_count,
                 g_world.ticks,
+                (float)g_world.time.accumulated_time,
                 //g_world.player_xs,
                 //g_world.player_ys,
                 //g_world.player_angles,

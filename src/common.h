@@ -24,7 +24,7 @@ typedef struct Game_Time {
     LARGE_INTEGER global_start_time;
     LARGE_INTEGER frame_start_time;
     LARGE_INTEGER frame_end_time;
-    double frame_time, accumulated_time;    
+    double frame_time, accumulated_time;
 } Game_Time;
 
 bool start_game_time();
@@ -60,6 +60,7 @@ typedef enum Message_Type: char {
     SER_FIELD(uint32_t, player_id)           \
     SER_FIELD(uint32_t, number_of_players)   \
     SER_FIELD(uint32_t, ticks)               \
+    SER_FIELD(float,    accumulated_time)    \
     SER_ARRAY(float,    xs, MAX_PLAYERS)     \
     SER_ARRAY(float,    ys, MAX_PLAYERS)     \
     SER_ARRAY(float,    angles, MAX_PLAYERS) \
