@@ -160,6 +160,10 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
                     assert(type == PLAYER_INPUT);
                     connected_players[player_id].input = deserialize_Player_Input(&msg);
                     printf("got Player_Input{target_angle: %f}\n", connected_players[player_id].input.target_angle);
+                    printf("Requesting sync tick=%u\n", g_world.ticks);
+                    for (int i = 0; i < g_world.player_count; i++) {
+                        connected_players[i].is_up_to_date = false;
+                    }
                 } else {
                     printf("error: got recv_code %d\n", recv_code);
                     goto end;
