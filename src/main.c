@@ -182,6 +182,7 @@ DWORD WINAPI connection_thread() {
                     state_sync.accumulated_time,
                     state_sync.ticks
                     );
+                my_id = state_sync.player_id;
                 g_world.time.accumulated_time = (double)state_sync.accumulated_time;
                 g_world.player_count = state_sync.number_of_players;
                 g_world.ticks = state_sync.ticks;
