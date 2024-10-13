@@ -100,8 +100,16 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
 
     Message msg = {0};
     extend_message_capacity(&msg, MESSAGE_MAX_LEN);
-
     size_t player_id = g_world.player_count - 1;
+
+    // set non-blocking
+    u_long option = 1;
+    int error = ioctlsocket(socket, FIONBIO, &option);
+    while (error != 0) {
+        printf("setting non-block socket failed: ioctlsocket failed with error: %d, %d\n", error, WSAGetLastError());
+        Sleep(1000);
+        error = ioctlsocket(socket, FIONBIO, &option);
+    }
 
     while(true) {
 
@@ -135,30 +143,26 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
                 serialize_State_Sync(&msg, &s);
                 send_message(socket, &msg, STATE_SYNC);
 
-            } else if(false) {
+            } else {
 
-                u_long bytes_available = 0;
-                ioctlsocket(socket, FIONREAD, &bytes_available);
+                // we ccheck if we have a message from the clinet
 
-                if (bytes_available > 0) {
-                    int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
-                    if ( recv_code == 0 ) {
-                        printf("Player connection closed\n");
-                        break;
-                    } else if ( recv_code < 0) {
-                        printf("recv failed: %d\n", WSAGetLastError());
-                        closesocket(socket);
-                        WSACleanup();
-                        break;
-                    }
-
+                msg.length = 0; // reset
+                int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
+                if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
+                    // we have no message so we could send something else!
+                    // here we just chill for now
+                } else if ( recv_code > 0 ) {
+                    // we got a message yay !
                     // we have a message from the client to handle
                     msg.length = recv_code;
                     Message_Type type = extract_message_type(&msg);
                     assert(type == PLAYER_INPUT);
-
                     connected_players[player_id].input = deserialize_Player_Input(&msg);
-
+                    printf("got Player_Input{target_angle: %f}\n", connected_players[player_id].input.target_angle);
+                } else {
+                    printf("error: got recv_code %d\n", recv_code);
+                    goto end;
                 }
             }
         } break;
@@ -169,6 +173,7 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
         Sleep(10);
     }
 
+end:
     closesocket(socket);
     WSACleanup();
     return 0;
@@ -184,16 +189,16 @@ DWORD WINAPI connection_manager_thread(LPVOID passed_socket) {
     SOCKET connection_socket = (SOCKET)passed_socket;
 
     while (true) {
-        SOCKET AcceptSocket;
+        SOCKET accept_socket;
         wprintf(L"connection_manager: waiting for client to connect on %s:%d ...\n", SERVER, PORT);
-        AcceptSocket = accept(connection_socket, NULL, NULL);
-        if (AcceptSocket == INVALID_SOCKET) {
-            wprintf(L"connection_manager: accept failed with error: %ld\n", WSAGetLastError());
+        accept_socket = accept(connection_socket, NULL, NULL);
+        if (accept_socket == INVALID_SOCKET) {
+            printf("connection_manager: accept failed with error: %d\n", WSAGetLastError());
         } else {
-            CreateThread(NULL, 0, player_connection_thread, (LPVOID)AcceptSocket, 0, NULL);
+            CreateThread(NULL, 0, player_connection_thread, (LPVOID)accept_socket, 0, NULL);
         }
 
-        Sleep(1);
+        Sleep(100);
     }
 }
 
@@ -205,10 +210,17 @@ int main(int argc, char** argv) {
 
     if (!start_game_time()) return 1;
 
+    int lobby_ticks = 0;
+
     while(true) {
 
         switch (server_state) {
         case IN_LOBBY:
+            Sleep(200);
+            lobby_ticks++;
+            if (lobby_ticks >= 30) { // TODO: delete this
+                server_state = IN_GAME;
+            }
             break;
         case IN_GAME: {
             while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {

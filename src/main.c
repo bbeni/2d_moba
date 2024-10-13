@@ -99,6 +99,29 @@ enum State {
 static enum State state = WAITING_TO_CONNECT;
 static size_t my_id;
 
+struct {
+    #define QUEUE_SIZE 24
+    Player_Input data[QUEUE_SIZE]; // FIFO queue
+    size_t tail; // append to tail
+    size_t head; // eat from head
+} input_queue = {0};
+
+void add_to_input_queue(Player_Input input) {
+    input_queue.data[input_queue.tail] = input;
+    input_queue.tail = (input_queue.tail + 1) % QUEUE_SIZE;
+};
+
+bool consume_from_input_queue(Player_Input* out) {
+    if (input_queue.head == input_queue.tail) {
+        return false; // we are empty
+    }
+
+    *out = input_queue.data[input_queue.head];
+    input_queue.head = (input_queue.head + 1) % QUEUE_SIZE;
+    return true;
+}
+
+
 DWORD WINAPI connection_thread() {
 
     while (!connect_to_server()) {
@@ -133,6 +156,14 @@ DWORD WINAPI connection_thread() {
 
         if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
             // we have no message so we could send something else!
+            if (state == CONNECTED_GAME) {
+                Player_Input inp = {0};
+                if (consume_from_input_queue(&inp)) {
+
+                    serialize_Player_Input(&to_send, &inp);
+                    send_message(server_socket, &to_send, PLAYER_INPUT);
+                }
+            }
 
         } else if ( recv_code > 0 ) {
             // we got a message yay !
@@ -141,15 +172,16 @@ DWORD WINAPI connection_thread() {
 
             switch(type) {
             case STATE_SYNC: {
+                state = CONNECTED_GAME;
                 State_Sync state_sync = deserialize_State_Sync(&received);
                 printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
-                state_sync.number_of_players,
-                state_sync.player_id,
-                state_sync.xs[state_sync.player_id],
-                state_sync.ys[state_sync.player_id],
-                state_sync.accumulated_time,
-                state_sync.ticks
-                );
+                    state_sync.number_of_players,
+                    state_sync.player_id,
+                    state_sync.xs[state_sync.player_id],
+                    state_sync.ys[state_sync.player_id],
+                    state_sync.accumulated_time,
+                    state_sync.ticks
+                    );
                 g_world.time.accumulated_time = (double)state_sync.accumulated_time;
                 g_world.player_count = state_sync.number_of_players;
                 g_world.ticks = state_sync.ticks;
@@ -165,42 +197,43 @@ DWORD WINAPI connection_thread() {
             } break;
             case GAME_START: {
                 printf("Game_Start{}\n");
+                state = CONNECTED_GAME;
             } break;
-        default:
-            assert(false && "go unknown type of message");
+            default:
+                assert(false && "go unknown type of message");
+            }
+
+
+        } else if ( recv_code == 0 ) {
+            // the server wants to go
+            printf("connection closed\n");
+            break;
+        } else {
+            // it is and error!
+            printf("recv failed: %d\n", WSAGetLastError());
+
+            state = RECONNECTING;
+            printf("Reconnecting...\n");
+            closesocket(server_socket);
+            WSACleanup();
+
+            while (!connect_to_server()) {
+                Sleep(2000);
+            }
+
+            state = CONNECTED_LOBBY;
+            printf("Reconnected\n");
+
         }
 
-
-    } else if ( recv_code == 0 ) {
-        // the server wants to go
-        printf("connection closed\n");
-        break;
-    } else {
-        // it is and error!
-        printf("recv failed: %d\n", WSAGetLastError());
-
-        state = RECONNECTING;
-        printf("Reconnecting...\n");
-        closesocket(server_socket);
-        WSACleanup();
-
-        while (!connect_to_server()) {
-            Sleep(2000);
-        }
-
-        state = CONNECTED_LOBBY;
-        printf("Reconnected\n");
-
+        Sleep(10);
     }
 
-    Sleep(10);
-}
+    free(received.data);
+    closesocket(server_socket);
+    WSACleanup();
 
-free(received.data);
-closesocket(server_socket);
-WSACleanup();
-
-return 0;
+    return 0;
 }
 
 void draw_lobby() {
@@ -268,6 +301,8 @@ void draw_stats() {
     DrawText(TextFormat("FPS: %d", GetFPS()), 10, 40, 20, text_color);
 }
 
+Player_Input current_input = {0};
+
 int main() {
 
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
@@ -287,28 +322,35 @@ int main() {
         if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
         if (IsKeyPressed(KEY_RIGHT)) gamepad++;
 
-        float target_angle = g_world.player_angles[my_id];
-        if (IsGamepadAvailable(gamepad) && my_id < g_world.player_count) {
+        if (state == CONNECTED_GAME) {
+            float target_angle = g_world.player_angles[my_id];
+            if (my_id < g_world.player_count) {
+                float x_axis;
+                float y_axis;
+                if (IsGamepadAvailable(gamepad)) {
+                    x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
+                    y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
+                } else {
+                    x_axis = IsKeyDown(KEY_D) - IsKeyDown(KEY_A);
+                    y_axis = IsKeyDown(KEY_S) - IsKeyDown(KEY_W);
+                }
+                Vec2 pad_vec = (Vec2){x_axis, y_axis};
+                if (length(&pad_vec) > 0.35f) {
+                    Vec2 dir = pad_vec;
+                    normalize_or_y_axis(&dir);
+                    const Vec2 right = (Vec2){1.0f, 0.0f};
+                    float angle = -angle_between(&dir, &right);
+                    printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
+                    target_angle = angle;
+                }
+            }
 
-            float x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
-            float y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
-            Vec2 pad_vec = (Vec2){x_axis, y_axis};
-            if (length(&pad_vec) > 0.35f) {
-                Vec2 dir = pad_vec;
-                normalize_or_y_axis(&dir);
-                const Vec2 right = (Vec2){1.0f, 0.0f};
-                float angle = -angle_between(&dir, &right);
-                printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
-                target_angle = angle;
+            if (target_angle != g_world.player_target_angles[my_id]) {
+                g_world.player_target_angles[my_id] = target_angle;
+                current_input.target_angle = target_angle;
+                add_to_input_queue(current_input);
             }
         }
-
-        if (target_angle != g_world.player_target_angles[my_id]) {
-            g_world.player_target_angles[my_id] = target_angle;
-            //input.target_angle = target_angle;
-        }
-
-
 
         if (WindowShouldClose()) break;
 
