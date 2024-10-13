@@ -132,7 +132,14 @@ DWORD WINAPI connection_thread() {
                     state_sync.player_id,
                     state_sync.xs[state_sync.player_id],
                     state_sync.ys[state_sync.player_id]
-            );
+                    );
+            g_world.player_count = state_sync.number_of_players;
+            g_world.ticks = state_sync.ticks;
+            memcpy(g_world.player_xs, state_sync.xs, 4*MAX_PLAYERS);
+            memcpy(g_world.player_ys, state_sync.ys, 4*MAX_PLAYERS);
+            memcpy(g_world.player_angles, state_sync.angles, 4*MAX_PLAYERS);
+            memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
+
         } else if ( recv_code == 0 ) {
             printf("Connection closed\n");
         } else {
