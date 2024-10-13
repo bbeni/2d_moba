@@ -41,6 +41,9 @@ void tick() {
             g_world.player_ys[i] += WORLD_HEIGHT;
         };        
     }
+    
+    g_world.ticks++;
+    //printf("Tick Tock: %u\n", g_world.ticks);
 };
 
 void add_player() {
@@ -60,6 +63,41 @@ void add_player() {
     g_world.player_angles[index] = 0.0f;
     g_world.player_target_angles[index] = M_PI * 0.5f;   
 }
+
+// time stuff
+
+bool start_game_time() {
+    if (!QueryPerformanceFrequency(&g_world.time.frequency)) {
+        printf("QueryPerformanceFrequency failed!\n");
+        return false;
+    }
+    QueryPerformanceCounter(&g_world.time.global_start_time);
+    QueryPerformanceCounter(&g_world.time.frame_start_time);
+    return true;
+};
+
+void wait_game_time() {
+
+    Game_Time* gt = &g_world.time;
+
+    //printf("Accumulated %f time\n", gt->accumulated_time);
+
+    QueryPerformanceCounter(&gt->frame_end_time);    
+    gt->frame_time = (double)(gt->frame_end_time.QuadPart - gt->frame_start_time.QuadPart) / gt->frequency.QuadPart;
+    double sleep_time = TICK_TIME - gt->frame_time;
+    double busy_wait_time = gt->frame_time;
+
+    if (sleep_time > 0) {
+        Sleep((DWORD)(sleep_time * 900)); // Sleep for 90% of the remaining time
+        do {
+            QueryPerformanceCounter(&gt->frame_end_time);
+            busy_wait_time = (double)(gt->frame_end_time.QuadPart - gt->frame_start_time.QuadPart) / gt->frequency.QuadPart;
+        } while (busy_wait_time < TICK_TIME);
+    }
+    QueryPerformanceCounter(&g_world.time.frame_start_time);
+    gt->accumulated_time += busy_wait_time;
+}
+
 
 // network stuff
 

@@ -29,8 +29,6 @@
 #define PS3_NAME_ID             "Sony PLAYSTATION(R)3 Controller"
 static int gamepad = 0;
 
-// Networking stuff
-#define MESSAGE_LEN 512
 SOCKET server_socket;
 
 bool connect_to_server() {
@@ -98,25 +96,29 @@ enum State {
 };
 
 static enum State state = WAITING_TO_CONNECT;
+static size_t my_id;
 
 DWORD WINAPI connection_thread() {
 
     while (!connect_to_server()) {
-        printf("Connecting to server...\n");
+        printf("connection_thread: try connecting to server...\n");
         Sleep(1000);
     }
 
     state = CONNECTED;
-    printf("Connected\n");
+    printf("connection_thread: connected, starting\n");
+
+    //Message msg_buffer = {0};
+    //extend_message_capacity(&msg_buffer, MESSAGE_MAX_LEN);
 
     Message received = {0};
-    received.data = malloc(MESSAGE_LEN);
+    received.data = malloc(MESSAGE_MAX_LEN);
 
     int recv_code = 1;
     while(recv_code > 0) {
 
         received.length = 0; // reset
-        recv_code = recv(server_socket, received.data, MESSAGE_LEN, 0);
+        recv_code = recv(server_socket, received.data, MESSAGE_MAX_LEN, 0);
         
         if ( recv_code > 0 ) {
             received.length = recv_code;
@@ -124,8 +126,7 @@ DWORD WINAPI connection_thread() {
             assert(type == STATE_SYNC);
             
             State_Sync state_sync = deserialize_State_Sync(&received);
-            printf("Server_Sync{server_name: %s, id: %d, n_players: %d, my_id: %d, my position: (%f, %f)}\n",
-                    state_sync.server_name,
+            printf("Server_Sync{id: %d, n_players: %d, my_id: %d, my position: (%f, %f)}\n",
                     state_sync.server_id,
                     state_sync.number_of_players,
                     state_sync.player_id,
@@ -226,29 +227,23 @@ int main() {
 
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
 
+    if (!start_game_time()) return 1;
+    
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Hello");
 
     int w = WINDOW_WIDTH;
     int h = WINDOW_HEIGHT;
 
-    add_player();
-    add_player();
+    while(true) {
 
-    SetTargetFPS(1000/TICK_TIME);
-
-    while(!WindowShouldClose()) {
+        // Handle Input
         
-        BeginDrawing();
-        ClearBackground(BG_COLOR);
-        draw_stats();
-
         if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
         if (IsKeyPressed(KEY_RIGHT)) gamepad++;
-        
-        if (IsGamepadAvailable(gamepad)) {
 
-            draw_gamepad();
+        float target_angle = g_world.player_angles[my_id];        
+        if (IsGamepadAvailable(gamepad) && my_id < g_world.player_count) {
             
             float x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
             float y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
@@ -259,15 +254,27 @@ int main() {
                 const Vec2 right = (Vec2){1.0f, 0.0f};
                 float angle = -angle_between(&dir, &right);
                 printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
-                if (g_world.player_count > 0) {
-                    g_world.player_target_angles[0] = angle;
-                }
-            } else {
-                if (g_world.player_count > 0) {
-                    g_world.player_target_angles[0] = g_world.player_angles[0];
-                }
+                target_angle = angle;
             }
-            
+        }
+
+        if (target_angle != g_world.player_target_angles[my_id]) {
+            g_world.player_target_angles[my_id] = target_angle;
+            //input.target_angle = target_angle;
+        }
+
+        while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
+            tick();
+        }
+
+        if (WindowShouldClose()) break;
+
+        BeginDrawing();
+        ClearBackground(BG_COLOR);
+        draw_stats();
+
+        if (IsGamepadAvailable(gamepad)) {
+            draw_gamepad();
         }
 
         switch (state) {
@@ -284,10 +291,10 @@ int main() {
             break;
         }
 
-        tick();
         draw_game();
-                
         EndDrawing();
+
+        wait_game_time();
     }
 
     return 0;
