@@ -83,6 +83,52 @@ void handle_inputs() {
     }
 }
 
+void handle_in_lobby_send(SOCKET socket, Message* msg, uint32_t player_id) {
+    printf("Sending State_Sync to player with id %u\n", player_id);
+    Lobby_Sync s = (Lobby_Sync){
+        g_world.player_count,
+    };
+    serialize_Lobby_Sync(msg, &s);
+    send_message(socket, msg, LOBBY_SYNC);
+};
+
+// return true if sent
+bool handle_in_game_send(SOCKET socket, Message* msg, uint32_t player_id) {
+    if (!connected_players[player_id].is_up_to_date) {
+        connected_players[player_id].is_up_to_date = true;
+
+        printf("Sending State_Sync to player with id %u\n", player_id);
+        State_Sync s = (State_Sync){
+            161,
+            player_id,
+            g_world.player_count,
+            g_world.ticks,
+            (float)g_world.time.accumulated_time,
+        };
+
+        memcpy(s.xs, g_world.player_xs, 4*MAX_PLAYERS);
+        memcpy(s.ys, g_world.player_ys, 4*MAX_PLAYERS);
+        memcpy(s.angles, g_world.player_angles, 4*MAX_PLAYERS);
+        memcpy(s.target_angles, g_world.player_target_angles, 4*MAX_PLAYERS);
+
+        serialize_State_Sync(msg, &s);
+        send_message(socket, msg, STATE_SYNC);
+        return true;
+    }
+    return false;
+};
+
+void handle_in_game_message(SOCKET socket, Message* msg, Message_Type type, uint32_t player_id) {
+
+    assert(type == PLAYER_INPUT);
+    connected_players[player_id].input = deserialize_Player_Input(msg);
+    printf("got Player_Input{target_angle: %f}\n", connected_players[player_id].input.target_angle);
+    printf("Requesting sync tick=%u\n", g_world.ticks);
+    for (int i = 0; i < g_world.player_count; i++) {
+        connected_players[i].is_up_to_date = false;
+    }
+
+};
 
 DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
 
@@ -90,13 +136,13 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
 
     if (!add_player_connection(socket)) {
         // TODO: reject new player with a message!
-        wprintf(L"Rejected player as we are already full\n");
+        wprintf(L"player_connection_thread(): rejected player as we are already full\n");
         closesocket(socket);
     }
 
     add_player();
 
-    printf("Player connected %llu/%d\n", g_world.player_count, MAX_PLAYERS);
+    printf("player_connection_thread(): player connected %llu/%d\n", g_world.player_count, MAX_PLAYERS);
 
     Message msg = {0};
     extend_message_capacity(&msg, MESSAGE_MAX_LEN);
@@ -106,7 +152,7 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
     u_long option = 1;
     int error = ioctlsocket(socket, FIONBIO, &option);
     while (error != 0) {
-        printf("setting non-block socket failed: ioctlsocket failed with error: %d, %d\n", error, WSAGetLastError());
+        printf("player_connection_thread(): setting non-block socket failed: ioctlsocket failed with error: %d, %d\n", error, WSAGetLastError());
         Sleep(1000);
         error = ioctlsocket(socket, FIONBIO, &option);
     }
@@ -114,62 +160,27 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
     while(true) {
 
         switch (server_state) {
-        case IN_LOBBY: {
-            printf("Sending State_Sync to player with id %llu\n", player_id);
-            Lobby_Sync s = (Lobby_Sync){
-                g_world.player_count,
-            };
-            serialize_Lobby_Sync(&msg, &s);
-            send_message(socket, &msg, LOBBY_SYNC);
-        } break;
-        case IN_GAME: {
-            if (!connected_players[player_id].is_up_to_date) {
-                connected_players[player_id].is_up_to_date = true;
-
-                printf("Sending State_Sync to player with id %llu\n", player_id);
-                State_Sync s = (State_Sync){
-                    161,
-                    player_id,
-                    g_world.player_count,
-                    g_world.ticks,
-                    (float)g_world.time.accumulated_time,
-                };
-
-                memcpy(s.xs, g_world.player_xs, 4*MAX_PLAYERS);
-                memcpy(s.ys, g_world.player_ys, 4*MAX_PLAYERS);
-                memcpy(s.angles, g_world.player_angles, 4*MAX_PLAYERS);
-                memcpy(s.target_angles, g_world.player_target_angles, 4*MAX_PLAYERS);
-
-                serialize_State_Sync(&msg, &s);
-                send_message(socket, &msg, STATE_SYNC);
-
+        case IN_LOBBY:
+            handle_in_lobby_send(socket, &msg, player_id);
+            break;
+        case IN_GAME:
+            if (handle_in_game_send(socket, &msg, player_id)) break;
+            // we check if we have a message from the client
+            msg.length = 0; // reset
+            int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
+            if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
+                // we have no message
+                break;
+            } else if ( recv_code > 0 ) {
+                // we got a message yay !
+                msg.length = recv_code;
+                Message_Type type = extract_message_type(&msg);
+                handle_in_game_message(socket, &msg, type, player_id);
             } else {
-
-                // we ccheck if we have a message from the clinet
-
-                msg.length = 0; // reset
-                int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
-                if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
-                    // we have no message so we could send something else!
-                    // here we just chill for now
-                } else if ( recv_code > 0 ) {
-                    // we got a message yay !
-                    // we have a message from the client to handle
-                    msg.length = recv_code;
-                    Message_Type type = extract_message_type(&msg);
-                    assert(type == PLAYER_INPUT);
-                    connected_players[player_id].input = deserialize_Player_Input(&msg);
-                    printf("got Player_Input{target_angle: %f}\n", connected_players[player_id].input.target_angle);
-                    printf("Requesting sync tick=%u\n", g_world.ticks);
-                    for (int i = 0; i < g_world.player_count; i++) {
-                        connected_players[i].is_up_to_date = false;
-                    }
-                } else {
-                    printf("error: got recv_code %d\n", recv_code);
-                    goto end;
-                }
+                printf("player_connection_thread(%llu): error: got recv_code %d\n", player_id, recv_code);
+                goto end;
             }
-        } break;
+            break;
         default:
             assert(false && "unhandled server state");
         }
@@ -227,8 +238,8 @@ int main(int argc, char** argv) {
             }
             break;
         case IN_GAME: {
+            handle_inputs();
             while(g_world.time.accumulated_time > g_world.ticks * TICK_TIME) {
-                handle_inputs();
                 tick();
 
                 if (g_world.ticks % 50 == 0) {
