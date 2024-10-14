@@ -19,8 +19,8 @@
 #include "common.h"
 #include "mathematics.h"
 
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 900
+#define WINDOW_WIDTH 1600/3 * 2
+#define WINDOW_HEIGHT 900/3 * 2 
 
 #define BG_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
 
@@ -121,6 +121,7 @@ bool consume_from_input_queue(Player_Input* out) {
     return true;
 }
 
+Lobby_Sync lobby_state = {0};
 
 DWORD WINAPI connection_thread() {
 
@@ -138,6 +139,8 @@ DWORD WINAPI connection_thread() {
     Message to_send = {0};
     extend_message_capacity(&to_send, MESSAGE_MAX_LEN);
 
+    Player_Input current_input = {0};
+    
     // set non-blocking
     u_long option = 1;
     int error = ioctlsocket(server_socket, FIONBIO, &option);
@@ -156,13 +159,26 @@ DWORD WINAPI connection_thread() {
 
         if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
             // we have no message so we could send something else!
-            if (state == CONNECTED_GAME) {
-                Player_Input inp = {0};
-                if (consume_from_input_queue(&inp)) {
-
-                    serialize_Player_Input(&to_send, &inp);
+            switch(state) {
+            case CONNECTED_GAME: {
+                if (consume_from_input_queue(&current_input)) {
+                    serialize_Player_Input(&to_send, &current_input);
                     send_message(server_socket, &to_send, PLAYER_INPUT);
                 }
+            } break;
+            case CONNECTED_LOBBY: {
+                Player_Input last_input = current_input;
+                if (consume_from_input_queue(&current_input)) {
+                    
+                    bool did_click = (!(last_input.flags & PRIMARY_DOWN) && (current_input.flags & PRIMARY_DOWN));
+                    if (did_click) {
+                        send_message(server_socket, &to_send, LOBBY_TOGGLE_ACCEPT);
+                    }
+                }
+            } break;
+            default:
+                assert(false && "unhandled state in connection_thread()");
+                break;
             }
 
         } else if ( recv_code > 0 ) {
@@ -174,14 +190,14 @@ DWORD WINAPI connection_thread() {
             case STATE_SYNC: {
                 state = CONNECTED_GAME;
                 State_Sync state_sync = deserialize_State_Sync(&received);
-                printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
+                /*printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
                     state_sync.number_of_players,
                     state_sync.player_id,
                     state_sync.xs[state_sync.player_id],
                     state_sync.ys[state_sync.player_id],
                     state_sync.accumulated_time,
                     state_sync.ticks
-                    );
+                    );*/
                 my_id = state_sync.player_id;
                 g_world.time.accumulated_time = (double)state_sync.accumulated_time;
                 g_world.player_count = state_sync.number_of_players;
@@ -192,13 +208,9 @@ DWORD WINAPI connection_thread() {
                 memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
             } break;
             case LOBBY_SYNC: {
-                Lobby_Sync lobby_sync = deserialize_Lobby_Sync(&received);
+                lobby_state = deserialize_Lobby_Sync(&received);
                 state = CONNECTED_LOBBY;
-                printf("Lobby_Sync{n_players: %d}\n", lobby_sync.number_of_players);
-            } break;
-            case GAME_START: {
-                printf("Game_Start{}\n");
-                state = CONNECTED_GAME;
+                //printf("Lobby_Sync{n_players: %d, rdy: %d}\n", lobby_state.number_of_players, lobby_state.rdy[my_id]);
             } break;
             default:
                 assert(false && "go unknown type of message");
@@ -237,9 +249,28 @@ DWORD WINAPI connection_thread() {
     return 0;
 }
 
+Color player_color(size_t player_id) {
+    return (Color){(player_id*681)%(255), 50*player_id, 220, 255};
+}
+
+#define LOBBY_PLAYER_RADIUS 40
+#define LOBBY_RADIUS 300
+#define LOBBY_COLOR YELLOW
+
 void draw_lobby() {
+    int mid_x = WINDOW_WIDTH/2;
+    int mid_y = WINDOW_HEIGHT/2;
+    DrawCircle(mid_x, mid_y, LOBBY_RADIUS, LOBBY_COLOR);
+    DrawCircle(mid_x, mid_y, LOBBY_RADIUS - 5, BG_COLOR);
     const char* lobby_text = "Lobby";
-    DrawText(lobby_text, WINDOW_WIDTH/2 - MeasureText(lobby_text, 100)/2, WINDOW_HEIGHT/2 - 100/2, 100, YELLOW);
+    DrawText(lobby_text, mid_x - MeasureText(lobby_text, 100)/2, mid_y - 100/2, 100, LOBBY_COLOR);
+    int n = lobby_state.number_of_players;
+    for (int i=0; i < n; i++) {
+        float x = LOBBY_RADIUS * cosf(2*M_PI/n*i) + mid_x;
+        float y = LOBBY_RADIUS * sinf(2*M_PI/n*i) + mid_y;
+        DrawCircle(x, y, LOBBY_PLAYER_RADIUS, player_color(i));
+        if (!lobby_state.rdy[i]) DrawCircle(x, y, LOBBY_PLAYER_RADIUS - 5, BG_COLOR);
+    }
 }
 
 void draw_game() {
@@ -264,7 +295,7 @@ void draw_game() {
         (Vector2){nose.x, nose.y},
         (Vector2){rear_left.x, rear_left.y},
         (Vector2){rear_right.x, rear_right.y},
-        (Color){(i*681)%(255), 50*i, 220, 255});
+        player_color(i));
 
     }
 }
@@ -341,7 +372,7 @@ int main() {
                     normalize_or_y_axis(&dir);
                     const Vec2 right = (Vec2){1.0f, 0.0f};
                     float angle = -angle_between(&dir, &right);
-                    printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
+                    //printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
                     target_angle = angle;
                 }
             }
@@ -349,6 +380,18 @@ int main() {
             if (target_angle != g_world.player_target_angles[my_id]) {
                 g_world.player_target_angles[my_id] = target_angle;
                 current_input.target_angle = target_angle;
+                add_to_input_queue(current_input);
+            }
+        }
+
+        if (state == CONNECTED_LOBBY) {
+            if (IsKeyDown(KEY_SPACE)) {
+                current_input.flags |= PRIMARY_DOWN;
+                add_to_input_queue(current_input);
+            }
+
+            if (IsKeyUp(KEY_SPACE)){
+                current_input.flags &= ~PRIMARY_DOWN;
                 add_to_input_queue(current_input);
             }
         }

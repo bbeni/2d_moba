@@ -69,16 +69,20 @@ typedef struct Message {
 
 void extend_message_capacity(Message* message, size_t size);
 void serialize_char(Message* message, char val);
+void serialize_bool(Message* message, bool val);
 void serialize_uint32_t(Message* message, uint32_t val);
 void serialize_float(Message* message, float val);
 void* consume_uint32_t(void* buf, uint32_t* out);
 void* consume_float(void* buf, float* out);
 void* consume_char(void* buf, char* out);
+void* consume_bool(void* buf, bool* out);
 
 // TODO: make array versions for all above
 void serialize_char_array(Message* message, char* val, size_t length);
+void serialize_bool_array(Message* message, bool* val, size_t length);
 void serialize_float_array(Message* message, float* val, size_t length);
 void* consume_char_array(void* buf, char* out, size_t length);
+void* consume_bool_array(void* buf, bool* out, size_t length);
 void* consume_float_array(void* buf, float* out, size_t length);
 
 #endif // _SERIALIZER_H_
@@ -117,6 +121,12 @@ void serialize_char(Message* message, char val) {
     message->length += 1;
 }
 
+void serialize_bool(Message* message, bool val) {
+    extend_message_capacity(message, 1);
+    message->data[0] = (char)val;
+    message->length += 1;
+}
+
 void serialize_uint32_t(Message* message, uint32_t val) {
     extend_message_capacity(message, 4);
     uint32_t* buf = (uint32_t*)(&message->data[message->length]);
@@ -139,7 +149,9 @@ void serialize_char_array(Message* message, char* val, size_t length) {
     message->length += length;
 }
 
-#include <stdio.h>
+void serialize_bool_array(Message* message, bool* val, size_t length) {
+    serialize_char_array(message, (char*)val, length);
+}
 
 void serialize_float_array(Message* message, float* val, size_t length) {
     for (int i = 0; i < length; i++) {
@@ -162,11 +174,20 @@ void* consume_char(void* buf, char* out) {
     return buf + 1;
 }
 
+void* consume_bool(void* buf, bool* out) {
+    *out = (bool)consume_char(buf, (char*)out);
+    return buf + 1;
+}
+
 void* consume_char_array(void* buf, char* out, size_t length) {
     for(int i = 0; i < length; i++) {
         out[i] = ((char*)buf)[i];
     }
     return buf + length;
+}
+
+void* consume_bool_array(void* buf, bool* out, size_t length) {
+    return consume_char_array(buf, (char*)out, length);
 }
 
 void* consume_float_array(void* buf, float* out, size_t length) {

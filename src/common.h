@@ -51,7 +51,7 @@ void add_player();
 #define MESSAGE_MAX_LEN 512
 
 typedef enum Message_Type: char {
-    GAME_START,
+    LOBBY_TOGGLE_ACCEPT,
     LOBBY_SYNC,
     STATE_SYNC,
     PLAYER_INPUT,
@@ -73,7 +73,8 @@ typedef enum Message_Type: char {
 
 #define SER_STRUCT_NAME Lobby_Sync
 #define SER_FIELDS \
-    SER_FIELD(uint32_t, number_of_players)
+    SER_FIELD(uint32_t, number_of_players) \
+    SER_ARRAY(bool, rdy, MAX_PLAYERS)
 #define SER_CREATE
 #include "serializer.h"
 
@@ -87,7 +88,7 @@ typedef enum : uint32_t {
 
 #define SER_STRUCT_NAME Player_Input
 #define SER_FIELDS \
-    SER_FIELD(uint32_t, input_flags) \
+    SER_FIELD(uint32_t, flags) \
     SER_FIELD(float, target_angle)
 #define SER_CREATE
 #include "serializer.h"
