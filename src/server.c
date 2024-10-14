@@ -83,13 +83,14 @@ void handle_inputs() {
     }
 }
 
-void handle_in_lobby_send(SOCKET socket, Message* msg, uint32_t player_id) {
+bool handle_in_lobby_send(SOCKET socket, Message* msg, uint32_t player_id) {
     printf("Sending State_Sync to player with id %u\n", player_id);
     Lobby_Sync s = (Lobby_Sync){
         g_world.player_count,
     };
     serialize_Lobby_Sync(msg, &s);
     send_message(socket, msg, LOBBY_SYNC);
+    return true;
 };
 
 // return true if sent
@@ -117,6 +118,10 @@ bool handle_in_game_send(SOCKET socket, Message* msg, uint32_t player_id) {
     }
     return false;
 };
+
+void handle_in_lobby_message(SOCKET socket, Message* msg, Message_Type type, uint32_t player_id) {
+
+}
 
 void handle_in_game_message(SOCKET socket, Message* msg, Message_Type type, uint32_t player_id) {
 
@@ -157,38 +162,57 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
         error = ioctlsocket(socket, FIONBIO, &option);
     }
 
-    while(true) {
+    bool quit_please = false;
+
+    while(!quit_please) {
+
+        Sleep(SERVER_CONNECTION_THREAD_SLEEP);
+
+        bool did_send = false;
+        switch (server_state) {
+        case IN_LOBBY:
+            did_send = handle_in_lobby_send(socket, &msg, player_id);
+            break;
+        case IN_GAME:
+            did_send = handle_in_game_send(socket, &msg, player_id);
+            break;
+        default:
+            assert(false && "unhandled server state in sending part");
+            break;
+        }
+
+        if (did_send) continue;
+
+        // we check if we have a message from the client
+        msg.length = 0; // reset
+        int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
+        if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
+            // we have no message
+            continue;
+        }
+
+        if ( recv_code <= 0 ) {
+            printf("player_connection_thread(%llu): error: got recv_code %d\n", player_id, recv_code);
+            break;
+        }
+
+        // we got a message yay !
+        msg.length = recv_code;
+        Message_Type type = extract_message_type(&msg);
 
         switch (server_state) {
         case IN_LOBBY:
-            handle_in_lobby_send(socket, &msg, player_id);
+            handle_in_lobby_message(socket, &msg, type, player_id);
             break;
         case IN_GAME:
-            if (handle_in_game_send(socket, &msg, player_id)) break;
-            // we check if we have a message from the client
-            msg.length = 0; // reset
-            int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
-            if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
-                // we have no message
-                break;
-            } else if ( recv_code > 0 ) {
-                // we got a message yay !
-                msg.length = recv_code;
-                Message_Type type = extract_message_type(&msg);
-                handle_in_game_message(socket, &msg, type, player_id);
-            } else {
-                printf("player_connection_thread(%llu): error: got recv_code %d\n", player_id, recv_code);
-                goto end;
-            }
+            handle_in_game_message(socket, &msg, type, player_id);
             break;
         default:
-            assert(false && "unhandled server state");
+            assert(false && "unhandled server state in receiving part");
+            break;
         }
-
-        Sleep(10);
     }
 
-end:
     closesocket(socket);
     WSACleanup();
     return 0;

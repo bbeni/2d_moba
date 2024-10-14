@@ -17,6 +17,7 @@
 #define WORLD_WIDTH 1600
 #define WORLD_HEIGHT 900
 
+#define SERVER_CONNECTION_THREAD_SLEEP 10 // millis
 // Game stuff
 
 typedef struct Game_Time {
