@@ -19,8 +19,8 @@
 #include "common.h"
 #include "mathematics.h"
 
-#define WINDOW_WIDTH 1600/3 * 2
-#define WINDOW_HEIGHT 900/3 * 2 
+#define WINDOW_WIDTH 1600
+#define WINDOW_HEIGHT 900
 
 #define BG_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
 
@@ -144,7 +144,7 @@ DWORD WINAPI connection_thread() {
     extend_message_capacity(&to_send, MESSAGE_MAX_LEN);
 
     Player_Input current_input = {0};
-    
+
     // set non-blocking
     u_long option = 1;
     int error = ioctlsocket(server_socket, FIONBIO, &option);
@@ -173,7 +173,7 @@ DWORD WINAPI connection_thread() {
             case CONNECTED_LOBBY: {
                 Player_Input last_input = current_input;
                 if (consume_from_input_queue(&current_input)) {
-                    
+
                     bool did_click = (!(last_input.flags & PRIMARY_DOWN) && (current_input.flags & PRIMARY_DOWN));
                     if (did_click) {
                         send_message(server_socket, &to_send, LOBBY_TOGGLE_ACCEPT);
@@ -210,6 +210,18 @@ DWORD WINAPI connection_thread() {
                 memcpy(g_world.player_ys, state_sync.ys, 4*MAX_PLAYERS);
                 memcpy(g_world.player_angles, state_sync.angles, 4*MAX_PLAYERS);
                 memcpy(g_world.player_target_angles, state_sync.target_angles, 4*MAX_PLAYERS);
+
+                // sync shots
+                g_world.shots.count = state_sync.number_of_shots;
+                printf("shots: %lld\n", g_world.shots.count);
+                memcpy(g_world.shots.shooter_ids, state_sync.shots_player_ids, 4*MAX_SHOTS);
+                for (int i=0; i<MAX_SHOTS; i++) {
+                    g_world.shots.positions[i].x = state_sync.shots_xs[i];
+                    g_world.shots.positions[i].y = state_sync.shots_ys[i];
+                    g_world.shots.directions[i].x = state_sync.shots_direction_xs[i];
+                    g_world.shots.directions[i].y = state_sync.shots_direction_ys[i];
+                }
+
             } break;
             case LOBBY_SYNC: {
                 lobby_state = deserialize_Lobby_Sync(&received);
@@ -303,6 +315,11 @@ void draw_game() {
             player_color(i));
 
     }
+
+    count = g_world.shots.count;
+    for (int i=0; i<count; i++) {
+        DrawCircle(g_world.shots.positions[i].x, g_world.shots.positions[i].y, 5, WHITE);
+    }
 }
 
 void draw_gamepad() {
@@ -360,17 +377,18 @@ int main() {
 
         // In game input (Player_Input)
         Player_Input input = g_world.player_inputs[my_id];
+        input.target_angle = g_world.player_angles[my_id];
         if (state == CONNECTED_GAME) {
             if (my_id < g_world.player_count) {
                 float x_axis;
                 float y_axis;
+                x_axis = IsKeyDown(KEY_D) - IsKeyDown(KEY_A);
+                y_axis = IsKeyDown(KEY_S) - IsKeyDown(KEY_W);
                 if (IsGamepadAvailable(gamepad)) {
                     x_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_X);
                     y_axis = GetGamepadAxisMovement(gamepad, GAMEPAD_AXIS_LEFT_Y);
-                } else {
-                    x_axis = IsKeyDown(KEY_D) - IsKeyDown(KEY_A);
-                    y_axis = IsKeyDown(KEY_S) - IsKeyDown(KEY_W);
                 }
+
                 Vec2 pad_vec = (Vec2){x_axis, y_axis};
                 if (length(pad_vec) > 0.35f) {
                     Vec2 dir = pad_vec;
@@ -381,23 +399,28 @@ int main() {
                 }
             }
 
-            maybe_add_to_input_queue(input);
-            handle_game_input(input, my_id);
         }
-        
 
-        if (state == CONNECTED_LOBBY) {
-            Player_Input current_input = g_world.player_inputs[my_id];
-            if (IsKeyDown(KEY_SPACE)) {
-                current_input.flags |= PRIMARY_DOWN;
-            }
-
-            if (IsKeyUp(KEY_SPACE)){
-                current_input.flags &= ~PRIMARY_DOWN;
-            }
-            
-            maybe_add_to_input_queue(current_input);
+        if (IsKeyDown(KEY_SPACE)) {
+            input.flags |= PRIMARY_DOWN;
         }
+
+        if (IsKeyUp(KEY_SPACE)){
+            input.flags &= ~PRIMARY_DOWN;
+        }
+
+        if (IsGamepadAvailable(gamepad)) {
+            input.flags &= ~PRIMARY_DOWN;
+            if (IsGamepadButtonDown(gamepad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
+                input.flags |= PRIMARY_DOWN;
+            }
+        }
+
+
+
+        maybe_add_to_input_queue(input);
+        handle_game_input(input, my_id);
+
 
         if (WindowShouldClose()) break;
 

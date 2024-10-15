@@ -2,7 +2,7 @@
 
     STBI type library using X macros for struct serialization example usage:
 
-// Simple example for serializer.h 
+// Simple example for serializer.h
 #define SERIALIZER_IMPLEMENTATION
 #include "serializer.h"
 #include <stdio.h>
@@ -68,22 +68,26 @@ typedef struct Message {
 } Message;
 
 void extend_message_capacity(Message* message, size_t size);
+
 void serialize_char(Message* message, char val);
 void serialize_bool(Message* message, bool val);
 void serialize_uint32_t(Message* message, uint32_t val);
 void serialize_float(Message* message, float val);
+
 void* consume_uint32_t(void* buf, uint32_t* out);
 void* consume_float(void* buf, float* out);
 void* consume_char(void* buf, char* out);
 void* consume_bool(void* buf, bool* out);
 
-// TODO: make array versions for all above
 void serialize_char_array(Message* message, char* val, size_t length);
 void serialize_bool_array(Message* message, bool* val, size_t length);
 void serialize_float_array(Message* message, float* val, size_t length);
+void serialize_uint32_t_array(Message* message, uint32_t* val, size_t length);
+
 void* consume_char_array(void* buf, char* out, size_t length);
 void* consume_bool_array(void* buf, bool* out, size_t length);
 void* consume_float_array(void* buf, float* out, size_t length);
+void* consume_uint32_t_array(void* buf, uint32_t* out, size_t length);
 
 #endif // _SERIALIZER_H_
 
@@ -109,7 +113,7 @@ void extend_message_capacity(Message* message, size_t size) {
         while(message->length + size > message->capacity) {
             message->capacity *= 2;
         }
-        
+
         message->data = MESSAGE_REALLOC(message->data, message->capacity);
         assert(message->data != NULL && "cant realloc more space...");
     }
@@ -159,6 +163,12 @@ void serialize_float_array(Message* message, float* val, size_t length) {
     }
 }
 
+void serialize_uint32_t_array(Message* message, uint32_t* val, size_t length) {
+    for (int i = 0; i < length; i++) {
+        serialize_uint32_t(message, val[i]);
+    }
+}
+
 void* consume_uint32_t(void* buf, uint32_t* out) {
     *out = unpack_uint32_t(((uint32_t*)buf)[0]);
     return buf + 4;
@@ -193,6 +203,13 @@ void* consume_bool_array(void* buf, bool* out, size_t length) {
 void* consume_float_array(void* buf, float* out, size_t length) {
     for(int i = 0; i < length; i++) {
         buf = consume_float(buf, &out[i]);
+    }
+    return buf;
+}
+
+void* consume_uint32_t_array(void* buf, uint32_t* out, size_t length) {
+    for(int i = 0; i < length; i++) {
+        buf = consume_uint32_t(buf, &out[i]);
     }
     return buf;
 }

@@ -100,10 +100,11 @@ typedef enum Message_Type: char {
     SER_ARRAY(float,    angles, MAX_PLAYERS) \
     SER_ARRAY(float,    target_angles, MAX_PLAYERS) \
     SER_FIELD(uint32_t, number_of_shots) \
+    SER_ARRAY(uint32_t, shots_player_ids, MAX_SHOTS) \
     SER_ARRAY(float,    shots_xs, MAX_SHOTS) \
     SER_ARRAY(float,    shots_ys, MAX_SHOTS) \
-    SER_ARRAY(float,    shots_directions_xs, MAX_SHOTS) \
-    SER_ARRAY(float,    shots_directions_ys, MAX_SHOTS)
+    SER_ARRAY(float,    shots_direction_xs, MAX_SHOTS) \
+    SER_ARRAY(float,    shots_direction_ys, MAX_SHOTS)
 #define SER_CREATE
 #include "serializer.h"
 

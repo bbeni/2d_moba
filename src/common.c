@@ -30,16 +30,16 @@ void tick() {
         // periodic boundary
         if (g_world.player_xs[i] > WORLD_WIDTH) {
             g_world.player_xs[i] -= WORLD_WIDTH;
-        };        
+        };
         if (g_world.player_xs[i] < 0) {
             g_world.player_xs[i] += WORLD_WIDTH;
-        };        
+        };
         if (g_world.player_ys[i] > WORLD_HEIGHT) {
             g_world.player_ys[i] -= WORLD_HEIGHT;
-        };        
+        };
         if (g_world.player_ys[i] < 0) {
             g_world.player_ys[i] += WORLD_HEIGHT;
-        };        
+        };
     }
 
     for (int i=0; i<g_world.shots.count; i++) {
@@ -48,7 +48,7 @@ void tick() {
         pos = add(scale(dir, SHOT_SPEED), pos);
         g_world.shots.positions[i] = pos;
     }
-    
+
     g_world.ticks++;
     //bprintf("Tick Tock: %u\n", g_world.ticks);
 };
@@ -64,7 +64,7 @@ void maybe_shoot(Vec2 position, Vec2 direction, uint32_t shooter_id) {
 
 void handle_game_input(Player_Input input, size_t player_id) {
     Player_Input last_input = g_world.player_inputs[player_id];
-    g_world.player_target_angles[player_id] = input.target_angle;    
+    g_world.player_target_angles[player_id] = input.target_angle;
 
     bool primary_pressed = (!(last_input.flags & PRIMARY_DOWN) && (input.flags & PRIMARY_DOWN));
 
@@ -75,7 +75,7 @@ void handle_game_input(Player_Input input, size_t player_id) {
         Vec2 dir = {cosf(angle), sinf(angle)};
         maybe_shoot(pos, dir, player_id);
     }
-    
+
     g_world.player_inputs[player_id] = input; // update it
 }
 
@@ -94,7 +94,7 @@ void add_player() {
     g_world.player_xs[index] = x;
     g_world.player_ys[index] = y;
     g_world.player_angles[index] = 0.0f;
-    g_world.player_target_angles[index] = M_PI * 0.5f;   
+    g_world.player_target_angles[index] = M_PI * 0.5f;
 }
 
 // time stuff
@@ -115,7 +115,7 @@ void wait_game_time() {
 
     //printf("Accumulated %f time\n", gt->accumulated_time);
 
-    QueryPerformanceCounter(&gt->frame_end_time);    
+    QueryPerformanceCounter(&gt->frame_end_time);
     gt->frame_time = (double)(gt->frame_end_time.QuadPart - gt->frame_start_time.QuadPart) / gt->frequency.QuadPart;
     double sleep_time = TICK_TIME - gt->frame_time;
     double busy_wait_time = gt->frame_time;

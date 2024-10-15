@@ -116,11 +116,22 @@ bool handle_in_game_send(SOCKET socket, Message* msg, uint32_t player_id) {
         memcpy(s.angles, g_world.player_angles, 4*MAX_PLAYERS);
         memcpy(s.target_angles, g_world.player_target_angles, 4*MAX_PLAYERS);
 
+        // shot realated
+        s.number_of_shots = g_world.shots.count;
+        for (int i=0; i<MAX_SHOTS; i++) {
+            s.shots_xs[i] = g_world.shots.positions[i].x;
+            s.shots_ys[i] = g_world.shots.positions[i].y;
+            s.shots_direction_xs[i] = g_world.shots.directions[i].x;
+            s.shots_direction_ys[i] = g_world.shots.directions[i].y;
+        }
+        memcpy(s.shots_player_ids, g_world.shots.shooter_ids, 4*MAX_SHOTS);
+
+
         serialize_State_Sync(msg, &s);
         send_message(socket, msg, STATE_SYNC);
         return true;
     }
-    
+
     return false;
 };
 
@@ -139,6 +150,9 @@ void handle_in_game_message(SOCKET socket, Message* msg, Message_Type type, uint
 
     assert(type == PLAYER_INPUT);
     connected_players[player_id].input = deserialize_Player_Input(msg);
+    Player_Input input = deserialize_Player_Input(msg);
+
+    handle_game_input(input, player_id);
     //printf("got Player_Input{target_angle: %f}\n", connected_players[player_id].input.target_angle);
     //printf("Requesting sync tick=%u\n", g_world.ticks);
     for (int i = 0; i < g_world.player_count; i++) {
@@ -192,11 +206,11 @@ DWORD WINAPI player_connection_thread(LPVOID passed_socket) {
             assert(false && "unhandled server state in sending part");
             break;
         }
-        
+
         // TODO: change this we need not send lobby_sync always..
         // if (did_send) continue;
         Sleep(SERVER_CONNECTION_THREAD_SLEEP);
-        
+
         // we check if we have a message from the client
         msg.length = 0; // reset
         int recv_code = recv(socket, msg.data, MESSAGE_MAX_LEN, 0);
@@ -271,7 +285,7 @@ int main(int argc, char** argv) {
 
     if (!start_game_time()) return 1;
 
-    
+
     while(true) {
 
         switch (server_state) {
