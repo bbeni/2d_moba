@@ -41,10 +41,43 @@ void tick() {
             g_world.player_ys[i] += WORLD_HEIGHT;
         };        
     }
+
+    for (int i=0; i<g_world.shots.count; i++) {
+        Vec2 dir = g_world.shots.directions[i];
+        Vec2 pos = g_world.shots.positions[i];
+        pos = add(scale(dir, SHOT_SPEED), pos);
+        g_world.shots.positions[i] = pos;
+    }
     
     g_world.ticks++;
     //bprintf("Tick Tock: %u\n", g_world.ticks);
 };
+
+void maybe_shoot(Vec2 position, Vec2 direction, uint32_t shooter_id) {
+    size_t count = g_world.shots.count;
+    if (count >= MAX_SHOTS) return;
+    g_world.shots.directions[count] = direction;
+    g_world.shots.positions[count] = position;
+    g_world.shots.shooter_ids[count] = shooter_id;
+    g_world.shots.count++;
+}
+
+void handle_game_input(Player_Input input, size_t player_id) {
+    Player_Input last_input = g_world.player_inputs[player_id];
+    g_world.player_target_angles[player_id] = input.target_angle;    
+
+    bool primary_pressed = (!(last_input.flags & PRIMARY_DOWN) && (input.flags & PRIMARY_DOWN));
+
+    if (primary_pressed) {
+        // SHOOOOOT
+        Vec2 pos = {g_world.player_xs[player_id], g_world.player_ys[player_id]};
+        float angle = g_world.player_angles[player_id];
+        Vec2 dir = {cosf(angle), sinf(angle)};
+        maybe_shoot(pos, dir, player_id);
+    }
+    
+    g_world.player_inputs[player_id] = input; // update it
+}
 
 void add_player() {
     int index = g_world.player_count;
@@ -104,6 +137,7 @@ void wait_game_time() {
 void send_message(SOCKET socket, Message* msg, Message_Type type) {
     extend_message_capacity(msg, 1);
     msg->data[msg->length++] = (char)type;
+    printf("Sending length %lld on socket %lld with type %d\n", msg->length, socket, type);
     send(socket, msg->data, msg->length, 0);
 }
 

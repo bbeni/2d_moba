@@ -83,9 +83,9 @@ void move_towards_on_circle(float* angle, float target,  float speed, float dt) 
 } 
 
 
-float angle_between(const Vec2* a, const Vec2* b) {
-	float det = a->x * b->y - a->y * b->x;
-	float dot = a->x * b->x + a->y * b->y;
+float angle_between(Vec2 a, Vec2 b) {
+	float det = a.x * b.y - a.y * b.x;
+	float dot = a.x * b.x + a.y * b.y;
 	return atan2f(det, dot);
 }
 
@@ -111,39 +111,39 @@ void normalize_or_zero(Vec2* v) {
 	v->y *= factor;
 }
 
-float dot(const Vec2* a, const Vec2* b) {
-	return a->x * b->x + a->y * b->y;
+float dot(Vec2 a, Vec2 b) {
+	return a.x * b.x + a.y * b.y;
 }
 
-float length(const Vec2* vec) {
+float length(Vec2 vec) {
 	return sqrtf(dot(vec, vec));}
 
 
-Vec2 add(const Vec2* v, const Vec2* other) {
+Vec2 add(Vec2 v, Vec2 other) {
     return (Vec2){
-	v->x + other->x,
-	v->y + other->y,
+	v.x + other.x,
+	v.y + other.y,
     };
 }
     
-Vec2 sub(const Vec2* v, const Vec2* other) {
+Vec2 sub(Vec2 v, Vec2 other) {
     return (Vec2){
-	v->x - other->x,
-	v->y - other->y,
+	v.x - other.x,
+	v.y - other.y,
     };
 }
 
-Vec2 scale(const Vec2* v, float f) {
+Vec2 scale(Vec2 v, float f) {
     return (Vec2){
-        f*v->x,
-        f*v->y,
+        f*v.x,
+        f*v.y,
     };
 }
 
-bool not_equal(const Vec2* v1, const Vec2* v2) {
-    return v1->x != v2->x || v1->y != v2->y;
+bool not_equal(Vec2 v1, Vec2 v2) {
+    return v1.x != v2.x || v1.y != v2.y;
 }
 
-bool equal(const Vec2* v1, const Vec2* v2) {
-    return v1->x == v2->x && v1->y == v2->y;
+bool equal(Vec2 v1, Vec2 v2) {
+    return v1.x == v2.x && v1.y == v2.y;
 }

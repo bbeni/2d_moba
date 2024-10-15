@@ -99,6 +99,7 @@ enum State {
 static enum State state = WAITING_TO_CONNECT;
 static size_t my_id;
 
+// input queue for the network
 struct {
     #define QUEUE_SIZE 24
     Player_Input data[QUEUE_SIZE]; // FIFO queue
@@ -106,9 +107,12 @@ struct {
     size_t head; // eat from head
 } input_queue = {0};
 
-void add_to_input_queue(Player_Input input) {
+void maybe_add_to_input_queue(Player_Input input) {
+    Player_Input current_input = g_world.player_inputs[my_id];
+    if ((current_input.flags == input.flags) && (current_input.target_angle == input.target_angle)) return;
     input_queue.data[input_queue.tail] = input;
     input_queue.tail = (input_queue.tail + 1) % QUEUE_SIZE;
+    g_world.player_inputs[my_id] = input;
 };
 
 bool consume_from_input_queue(Player_Input* out) {
@@ -213,7 +217,8 @@ DWORD WINAPI connection_thread() {
                 //printf("Lobby_Sync{n_players: %d, rdy: %d}\n", lobby_state.number_of_players, lobby_state.rdy[my_id]);
             } break;
             default:
-                assert(false && "go unknown type of message");
+                printf("type of message: %d\n", type);
+                assert(false && "connection_thread: got unknown type of message");
             }
 
 
@@ -282,20 +287,20 @@ void draw_game() {
         float dx = cosf(angle);
         float dy = sinf(angle);
         Vec2 dir = {dx, dy};
-        Vec2 offset = scale(&dir, 30.f);
+        Vec2 offset = scale(dir, 30.f);
         Vec2 right = {-offset.y, offset.x};
         Vec2 pos = {x, y};
-        Vec2 nose = add(&pos, &offset);
-        Vec2 rear_right = add(&pos, &right);
-        rear_right = sub(&rear_right, &offset);
-        Vec2 rear_left = sub(&pos, &right);
-        rear_left = sub(&rear_left, &offset);
+        Vec2 nose = add(pos, offset);
+        Vec2 rear_right = add(pos, right);
+        rear_right = sub(rear_right, offset);
+        Vec2 rear_left = sub(pos, right);
+        rear_left = sub(rear_left, offset);
 
         DrawTriangle(
-        (Vector2){nose.x, nose.y},
-        (Vector2){rear_left.x, rear_left.y},
-        (Vector2){rear_right.x, rear_right.y},
-        player_color(i));
+            (Vector2){nose.x, nose.y},
+            (Vector2){rear_left.x, rear_left.y},
+            (Vector2){rear_right.x, rear_right.y},
+            player_color(i));
 
     }
 }
@@ -333,8 +338,6 @@ void draw_stats() {
     DrawText(TextFormat("FPS: %d", GetFPS()), 10, 40, 20, text_color);
 }
 
-Player_Input current_input = {0};
-
 int main() {
 
     CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
@@ -351,11 +354,13 @@ int main() {
 
         // Handle Input
 
+        // Change gamepad
         if (IsKeyPressed(KEY_LEFT) && gamepad > 0) gamepad--;
         if (IsKeyPressed(KEY_RIGHT)) gamepad++;
 
+        // In game input (Player_Input)
+        Player_Input input = g_world.player_inputs[my_id];
         if (state == CONNECTED_GAME) {
-            float target_angle = g_world.player_angles[my_id];
             if (my_id < g_world.player_count) {
                 float x_axis;
                 float y_axis;
@@ -367,33 +372,31 @@ int main() {
                     y_axis = IsKeyDown(KEY_S) - IsKeyDown(KEY_W);
                 }
                 Vec2 pad_vec = (Vec2){x_axis, y_axis};
-                if (length(&pad_vec) > 0.35f) {
+                if (length(pad_vec) > 0.35f) {
                     Vec2 dir = pad_vec;
                     normalize_or_y_axis(&dir);
                     const Vec2 right = (Vec2){1.0f, 0.0f};
-                    float angle = -angle_between(&dir, &right);
-                    //printf("%f, %f, angle: %f\n", x_axis, y_axis, angle);
-                    target_angle = angle;
+                    float angle = -angle_between(dir, right);
+                    input.target_angle = angle;
                 }
             }
 
-            if (target_angle != g_world.player_target_angles[my_id]) {
-                g_world.player_target_angles[my_id] = target_angle;
-                current_input.target_angle = target_angle;
-                add_to_input_queue(current_input);
-            }
+            maybe_add_to_input_queue(input);
+            handle_game_input(input, my_id);
         }
+        
 
         if (state == CONNECTED_LOBBY) {
+            Player_Input current_input = g_world.player_inputs[my_id];
             if (IsKeyDown(KEY_SPACE)) {
                 current_input.flags |= PRIMARY_DOWN;
-                add_to_input_queue(current_input);
             }
 
             if (IsKeyUp(KEY_SPACE)){
                 current_input.flags &= ~PRIMARY_DOWN;
-                add_to_input_queue(current_input);
             }
+            
+            maybe_add_to_input_queue(current_input);
         }
 
         if (WindowShouldClose()) break;

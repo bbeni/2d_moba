@@ -26,16 +26,16 @@ float lerp(float lower, float upper, float t);
 void move_towards(float* x, float target, float speed, float dt);
 void move_towards_on_circle(float* angle, float target,  float speed, float dt); // move towards the closer angle mapped from -pi to pi
 
-float dot(const Vec2* a, const Vec2* b);
-float length(const Vec2* vec);
-float angle_between(const Vec2* a, const Vec2* b); // -pi to pi
+float dot(Vec2 a, Vec2 b);
+float length(Vec2 vec);
+float angle_between(Vec2 a, Vec2 b); // -pi to pi
 void normalize_or_y_axis(Vec2* v);
 void normalize_or_zero(Vec2* v);
 
-Vec2 add(const Vec2* v, const Vec2* other);
-Vec2 sub(const Vec2* v, const Vec2* other);
-Vec2 scale(const Vec2* v, float f);
-bool not_equal(const Vec2* v1, const Vec2* other);
-bool equal(const Vec2* v1, const Vec2* other);
+Vec2 add(Vec2 v, Vec2 other);
+Vec2 sub(Vec2 v, Vec2 other);
+Vec2 scale(Vec2 v, float f);
+bool not_equal(Vec2 v1, const Vec2 other);
+bool equal(Vec2 v1, const Vec2 other);
 
 #endif // _MATHEMATICS_H
