@@ -10,7 +10,7 @@
 #undef far
 #endif
 
-#include "specific.h"
+#include "platform.h"
 #include "common.h"
 #include "mathematics.h"
 

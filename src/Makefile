@@ -13,7 +13,7 @@ SERVER_LIBS=-l:libraylib.a -lm -lwinmm -lgdi32 -lws2_32
 .PHONY: all
 all: main server
 
-main: $(BUILDDIR)/main.o $(BUILDDIR)/common.o $(BUILDDIR)/mathematics.o $(BUILDDIR)/specific.o
+main: $(BUILDDIR)/main.o $(BUILDDIR)/common.o $(BUILDDIR)/mathematics.o $(BUILDDIR)/platform.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 server: $(BUILDDIR)/server.o $(BUILDDIR)/common.o $(BUILDDIR)/mathematics.o

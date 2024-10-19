@@ -1,23 +1,18 @@
-#include "specific.h"
+// windows specific implementations
 #ifdef _WIN32
-  #define NOGDI             // All GDI defines and routines
-  #define NOUSER            // All USER defines and routines
-  #define WIN32_LEAN_AND_MEAN
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  #undef near
-  #undef far
-#else
-  /* Assume that any non-Windows platform uses POSIX-style sockets instead. */
-  #include <sys/socket.h>
-  #include <arpa/inet.h>
-  #include <netdb.h>  /* Needed for getaddrinfo() and freeaddrinfo() */
-  #include <unistd.h> /* Needed for close() */
-#endif
+#include "platform.h"
+
+#define NOGDI             // All GDI defines and routines
+#define NOUSER            // All USER defines and routines
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#undef near
+#undef far
+
 #include <assert.h>
 #include <stdio.h>
 
-#ifdef _WIN32
 bool open_connection(Socket* sock, const char* address, uint32_t port) {
     *sock = INVALID_SOCKET;
 
@@ -83,50 +78,14 @@ bool set_non_block(Socket sock) {
     return true;
 }
 
-#else // unix
-
-bool open_connection(Socket* sock, const char* address, uint32_t port) {
-    assert(false && "conect_to_socket(): not implemented for unix like");
-    return false;
-}
-
-bool close_connection(Socket sock) {
-    int status = shutdown(sock, SHUT_RDWR);
-    if (status != 0) {
-        printf("close_connection(): shutdown() failed on unix-like with code %d\n", status);
-        *sock = 
-        return false;
-    }
-    status = close(sock);
-    if (status != 0) {
-        printf("close_connection(): close() failed on unix-like with code %d\n", status);
-        return false;
-    }
-    return true;
-}
-
-bool set_non_block(Socket sock) {
-    assert(false && "conect_to_socket(): not implemented for unix like");
-    return false;
-}
-
-#endif
 
 void sleep_ms(int sleepMs) {
-#ifdef LINUX
-    usleep(sleepMs * 1000);
-#endif
-#ifdef _WIN32
     Sleep(sleepMs);
-#endif
 }
 
 void create_thread(Thread (*thread_func)(), Socket sock) {
-#ifdef _WIN32
     CreateThread(NULL, 0, thread_func, (LPVOID)sock, 0, NULL);
-#else
-    assert(false && "create_thread(): not implemented for unix-like");
-#endif
 }
 
 
+#endif // _WIN32
