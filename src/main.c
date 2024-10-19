@@ -1,26 +1,21 @@
 #include "raylib.h"
 #include <stdio.h>
 
+// this solves name collisions with raylib..
 #if defined(_WIN32)
 #define NOGDI             // All GDI defines and routines
 #define NOUSER            // All USER defines and routines
-#endif
-
-//#include <Windows.h> // or any library that uses Windows.h ...
 #define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#if defined(_WIN32)           // raylib uses these names as function parameters
 #undef near
 #undef far
 #endif
 
+#include "specific.h"
 #include "common.h"
 #include "mathematics.h"
 
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 900
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 576
 
 #define BG_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
 
@@ -29,65 +24,7 @@
 #define PS3_NAME_ID             "Sony PLAYSTATION(R)3 Controller"
 static int gamepad = 0;
 
-SOCKET server_socket;
-
-bool connect_to_server() {
-    server_socket = INVALID_SOCKET;
-
-    WSADATA wsaData;
-    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != NO_ERROR) {
-        wprintf(L"WSAStartup function failed with error: %d\n", iResult);
-        return false;
-    }
-
-    //----------------------
-    // Create a SOCKET for connecting to server
-    SOCKET ConnectSocket = INVALID_SOCKET;
-    ConnectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (ConnectSocket == INVALID_SOCKET) {
-        wprintf(L"socket function failed with error: %ld\n", WSAGetLastError());
-        WSACleanup();
-        return false;
-    }
-
-    //----------------------
-    // The sockaddr_in structure specifies the address family,
-    // IP address, and port of the server to be connected to.
-    struct sockaddr_in clientService;
-    clientService.sin_family = AF_INET;
-    clientService.sin_addr.s_addr = inet_addr(SERVER);
-    clientService.sin_port = htons(PORT);
-
-    //----------------------
-    // Connect to server.
-    iResult = connect(ConnectSocket, (SOCKADDR *) & clientService, sizeof (clientService));
-    if (iResult == SOCKET_ERROR) {
-        wprintf(L"connect function failed with error: %ld\n", WSAGetLastError());
-        iResult = closesocket(ConnectSocket);
-        if (iResult == SOCKET_ERROR)
-        wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-        WSACleanup();
-        return false;
-    }
-
-
-    /* close
-    iResult = closesocket(ConnectSocket);
-    if (iResult == SOCKET_ERROR) {
-        wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-        WSACleanup();
-        return false;
-    }
-
-    WSACleanup();
-    */
-    wprintf(L"Connected to server.\n");
-
-    server_socket = ConnectSocket;
-    return true;
-}
-
+Socket server_socket;
 
 enum State {
     WAITING_TO_CONNECT,
@@ -127,13 +64,13 @@ bool consume_from_input_queue(Player_Input* out) {
 
 Lobby_Sync lobby_state = {0};
 
-DWORD WINAPI connection_thread() {
+Thread connection_thread() {
 
-    while (!connect_to_server()) {
+    while (!open_connection(&server_socket, SERVER, PORT)) {
         printf("connection_thread: try connecting to server...\n");
-        Sleep(1000);
+        sleep_ms(1000);
     }
-
+    
     state = CONNECTED_LOBBY;
     printf("connection_thread: connected, starting\n");
 
@@ -145,13 +82,8 @@ DWORD WINAPI connection_thread() {
 
     Player_Input current_input = {0};
 
-    // set non-blocking
-    u_long option = 1;
-    int error = ioctlsocket(server_socket, FIONBIO, &option);
-    while (error != 0) {
-        printf("setting non-block socket failed: ioctlsocket failed with error: %d, %d\n", error, WSAGetLastError());
-        Sleep(1000);
-        error = ioctlsocket(server_socket, FIONBIO, &option);
+    while(!set_non_block(server_socket)){
+        sleep_ms(1000);
     }
 
     while(true) {
@@ -160,7 +92,6 @@ DWORD WINAPI connection_thread() {
         to_send.length = 0;  // reset
 
         int recv_code = recv(server_socket, received.data, MESSAGE_MAX_LEN, 0);
-
         if (recv_code == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) {
             // we have no message so we could send something else!
             switch(state) {
@@ -197,7 +128,7 @@ DWORD WINAPI connection_thread() {
                 /*printf("Server_Sync{n_players: %d, my_id: %d, my position: (%f, %f), time: %f, ticks: %d}\n",
                     state_sync.number_of_players,
                     state_sync.player_id,
-                    state_sync.xs[state_sync.player_id],
+  state_sync.xs[state_sync.player_id],
                     state_sync.ys[state_sync.player_id],
                     state_sync.accumulated_time,
                     state_sync.ticks
@@ -242,27 +173,21 @@ DWORD WINAPI connection_thread() {
             // it is and error!
             printf("recv failed: %d\n", WSAGetLastError());
 
+            close_connection(server_socket);
             state = RECONNECTING;
-            printf("Reconnecting...\n");
-            closesocket(server_socket);
-            WSACleanup();
-
-            while (!connect_to_server()) {
-                Sleep(2000);
+            while (!open_connection(&server_socket, SERVER, PORT)) {
+                printf("Reconnecting...\n");
+                sleep_ms(2000);
             }
-
             state = CONNECTED_LOBBY;
             printf("Reconnected\n");
-
         }
 
-        Sleep(10);
+        sleep_ms(10);
     }
 
     free(received.data);
-    closesocket(server_socket);
-    WSACleanup();
-
+    if (!close_connection(server_socket)) return 1;
     return 0;
 }
 
@@ -271,8 +196,9 @@ Color player_color(size_t player_id) {
 }
 
 #define LOBBY_PLAYER_RADIUS 40
-#define LOBBY_RADIUS 300
+#define LOBBY_RADIUS 250
 #define LOBBY_COLOR YELLOW
+#define TITLE_TEXT_SIZE 64
 
 void draw_lobby() {
     int mid_x = WINDOW_WIDTH/2;
@@ -280,7 +206,7 @@ void draw_lobby() {
     DrawCircle(mid_x, mid_y, LOBBY_RADIUS, LOBBY_COLOR);
     DrawCircle(mid_x, mid_y, LOBBY_RADIUS - 5, BG_COLOR);
     const char* lobby_text = "Lobby";
-    DrawText(lobby_text, mid_x - MeasureText(lobby_text, 100)/2, mid_y - 100/2, 100, LOBBY_COLOR);
+    DrawText(lobby_text, mid_x - MeasureText(lobby_text, TITLE_TEXT_SIZE)/2, mid_y - TITLE_TEXT_SIZE/2, TITLE_TEXT_SIZE, LOBBY_COLOR);
     int n = lobby_state.number_of_players;
     for (int i=0; i < n; i++) {
         float x = LOBBY_RADIUS * cosf(2*M_PI/n*i) + mid_x;
@@ -357,7 +283,7 @@ void draw_stats() {
 
 int main() {
 
-    CreateThread(NULL, 0, connection_thread, (LPVOID)server_socket, 0, NULL);
+    create_thread(connection_thread, server_socket);
 
     if (!start_game_time()) return 1;
 
@@ -435,11 +361,11 @@ int main() {
         switch (state) {
         case WAITING_TO_CONNECT:
             const char* connecting_string = "Connecting to server...";
-            DrawText(connecting_string, w/2 - MeasureText(connecting_string, 100)/2, h/2 - 50, 100, GREEN);
+            DrawText(connecting_string, w/2 - MeasureText(connecting_string, TITLE_TEXT_SIZE)/2, h/2 - TITLE_TEXT_SIZE/2, TITLE_TEXT_SIZE, GREEN);
             break;
         case RECONNECTING:
             const char* reconnecting_string = "Reconnecting...";
-            DrawText(reconnecting_string, w/2 - MeasureText(reconnecting_string, 100)/2, h/2 - 50, 100, GREEN);
+            DrawText(reconnecting_string, w/2 - MeasureText(reconnecting_string, TITLE_TEXT_SIZE)/2, h/2 - TITLE_TEXT_SIZE/2, TITLE_TEXT_SIZE, GREEN);
             break;
             case CONNECTED_LOBBY: {
                 draw_lobby();
@@ -451,7 +377,7 @@ int main() {
                 }
 
                 draw_game();
-                DrawCircle(w/2, h/2, 50.0f, RED);
+                //DrawCircle(w/2, h/2, 50.0f, RED);
             } break;
         default:
             assert(false && "unhandeled state in main");

@@ -19,8 +19,8 @@
 #define SHOT_SPEED 20.0f    // units per tick
 #define SHOT_COOLDOWN 5     // ticks
 #define ANGLE_SPEED 0.08f   // radians per tick
-#define WORLD_WIDTH 1600
-#define WORLD_HEIGHT 900
+#define WORLD_WIDTH 1024
+#define WORLD_HEIGHT 576
 #define SERVER_CONNECTION_THREAD_SLEEP 10 // millis
 
 // Game stuff
