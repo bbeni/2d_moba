@@ -53,12 +53,13 @@ int main() {
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #define MESSAGE_INITIAL_CAPACITY 4
 #ifndef MESSAGE_REALLOC
-#  include <stdlib.h>
-#  define MESSAGE_REALLOC realloc
+#    include <stdlib.h>
+#    define MESSAGE_REALLOC realloc
 #endif
 
 typedef struct Message {
